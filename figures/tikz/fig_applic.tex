@@ -1,0 +1,49 @@
+% New Fig. (R1c, R2): where the certificate applies.
+% -------- left panel: certifiability window over (collective, moment amplitude) --------
+\begin{tikzpicture}
+  \begin{axis}[
+    width=\panelwd, height=\panelht,
+    xmin=0.525, xmax=1.325, ymin=0.375, ymax=3.125,
+    xlabel={collective ($\times$ sweet-spot value)}, ylabel={moment amplitude ($\times$ ref)},
+    xtick={0.6,0.8,1.0,1.2}, ytick={0.5,1,1.5,2,2.5,3},
+    colormap={rb}{rgb255(0cm)=(214,39,40); rgb255(1cm)=(255,255,255); rgb255(2.6cm)=(31,119,180)},
+    point meta min=-1.6, point meta max=1.1,
+    colorbar, colorbar style={width=0.25cm, ytick={-1.5,-1,-0.5,0,0.5,1}, ylabel={$L^{\mathrm{op}}-\ldrop$ [nats]}, ylabel style={font=\small}},
+    axis on top, grid=none, enlargelimits=false
+  ]
+  \addplot[matrix plot*, mesh/rows=11, mesh/cols=16, mesh/ordering=y varies, point meta=explicit]
+    table[x=thrust, y=amp, meta=window]{data/certmap.dat};
+  \addplot[white, line width=1.6pt] table[x=thrust,y=amp]{data/certfront.dat};
+  \addplot[black, line width=0.6pt, densely dashed] table[x=thrust,y=amp]{data/certfront.dat};
+  % Monte-Carlo sampling boxes (envelope and scarce corner)
+  \draw[black, line width=0.6pt] (axis cs:0.7,1.0) rectangle (axis cs:1.2,2.0);
+  \draw[black, line width=0.6pt, dotted] (axis cs:0.68,1.0) rectangle (axis cs:0.82,2.0);
+  \node[font=\small, anchor=north east, fill=white, fill opacity=0.8, text opacity=1, inner sep=1pt] at (axis cs:1.30,3.07) {not certifiable};
+  \node[font=\small, anchor=south east, fill=white, fill opacity=0.8, text opacity=1, inner sep=1pt] at (axis cs:1.30,0.45) {certifiable};
+  \end{axis}
+\end{tikzpicture}%
+\hspace{0.35cm}%
+% -------- right panel: forward flight (hexarotor) --------
+\begin{tikzpicture}
+  \begin{axis}[
+    width=\panelwd, height=\panelht,
+    xmin=-0.5, xmax=15.5, ymin=-1.2, ymax=0.5,
+    xlabel={airspeed $V_\infty$ [m/s]}, ylabel={$\min_t h_s$ (true readiness margin)},
+    xtick={0,3,6,9,12,15},
+    legend style={font=\small, fill=white, fill opacity=0.85, text opacity=1,
+                  at={(0.02,0.03)}, anchor=south west, legend cell align=left}
+  ]
+  \addplot[draw=none, fill=cRed!12, forget plot] coordinates {(-0.5,-1.2)(15.5,-1.2)(15.5,0)(-0.5,0)};
+  \draw[cRed, line width=0.8pt] (axis cs:-0.5,0) -- (axis cs:15.5,0);
+  \addplot[draw=none, fill=cGrey!22, forget plot] coordinates {(9.33,-1.2)(15.5,-1.2)(15.5,0.5)(9.33,0.5)};
+  \addplot[cBlue, mark=*, mark size=1.6pt, line width=1.2pt] table[x=V,y=energy]{data/ff.dat};
+  \addlegendentry{effort-min}
+  \addplot[cOrange, mark=square*, mark size=1.6pt, line width=1.2pt] table[x=V,y=greedy]{data/ff.dat};
+  \addlegendentry{greedy DAAM}
+  \addplot[cGreen!70!black, mark=diamond*, mark size=1.8pt, line width=0.9pt] table[x=V,y=cbf]{data/ff.dat};
+  \addlegendentry{proposed (hover model)}
+  \addplot[cGreen!40!black, dashed, mark=triangle*, mark size=1.8pt, line width=0.9pt] table[x=V,y=aware]{data/ff.dat};
+  \addlegendentry{proposed (airspeed-scheduled)}
+  \node[font=\small, cGrey!70!black, anchor=north, align=center] at (axis cs:12.4,0.5) {$L^{\mathrm{op}}<\lbar$};
+  \end{axis}
+\end{tikzpicture}

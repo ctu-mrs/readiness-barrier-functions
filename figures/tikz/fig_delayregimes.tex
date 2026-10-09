@@ -1,0 +1,46 @@
+% Revised Fig. 6 (R2): every curve is in the legend; the delay-free value is a
+% reference line (a log axis cannot show tau_d = 0); the plain-floor sweep now
+% includes delays below the certified ceiling; the margined floor is a separate
+% family of runs that exists only for tau_d <= tau_d^* (raised floor must stay <= L^op).
+\begin{tikzpicture}
+    \begin{axis}[
+      width=\panelwd, height=\panelht,
+      xmode=log, xmin=0.2, xmax=250, ymin=-1.2, ymax=0.40,
+      xlabel={input delay $\tau_d$ [$10^{-3}\,T_0$]}, ylabel={$\min_t h$ (w.r.t.\ $\lbar$)},
+      xtick={0.5,1,2,5,10,20,50,100,200},
+      xticklabels={0.5,1,2,5,10,20,50,100,200},
+      ytick={-1,-0.75,-0.5,-0.25,0,0.25},
+      legend style={at={(0.02,0.03)}, anchor=south west, font=\small, fill=white, fill opacity=0.9, text opacity=1, legend cell align=left},
+      clip mode=individual
+    ]
+    % ---- regime bands (no outlines) ----
+    \addplot[draw=none, fill=cGreen!16, forget plot]
+      coordinates {(0.2,-1.2)(1.9656,-1.2)(1.9656,0.40)(0.2,0.40)}--cycle;
+    \addplot[draw=none, fill=cOrange!13, forget plot]
+      coordinates {(1.9656,-1.2)(91.6,-1.2)(91.6,0.40)(1.9656,0.40)}--cycle;
+    \addplot[draw=none, fill=cRed!14, forget plot]
+      coordinates {(91.6,-1.2)(250,-1.2)(250,0.40)(91.6,0.40)}--cycle;
+    \node[font=\small, cGreen!45!black, anchor=north] at (axis cs:0.63,0.385) {certified};
+    \node[font=\small, cOrange!80!black, anchor=north] at (axis cs:14,0.385) {tolerated (not certified)};
+    \node[font=\small, cRed, anchor=north] at (axis cs:155,0.385) {fails};
+    % ---- floor and delay-free reference ----
+    \draw[cRed, line width=0.8pt] (axis cs:0.2,0) -- (axis cs:250,0);
+    \addplot[cGrey, densely dotted, line width=0.9pt, domain=0.2:250, samples=2] {0.1636};
+    \addlegendentry{delay-free ($\tau_d=0$)}
+    % ---- measured, plain floor ----
+    \addplot[cRed, mark=*, mark size=1.5pt, line width=0.9pt]
+      table[x=tau_d_ms,y=minh_plain]{data/delay.dat};
+    \addlegendentry{plain floor $\lbar$}
+    % ---- margined floor ----
+    \addplot[cBlue, mark=square*, mark size=1.7pt, line width=0.9pt]
+      table[x=tau_d_ms,y=minh_margined]{data/delay_marg.dat};
+    \addlegendentry{margined floor $\lbar+\eta(\tau_d)$}
+    % ---- bound ----
+    \addplot[black, dashed, line width=0.8pt]
+      table[x=tau_d_ms,y=eta]{data/delay_eta.dat};
+    \addlegendentry{bound $-\eta(\tau_d)$, Prop.~\ref{prop:delay}}
+    % ---- certified ceiling ----
+    \draw[black, dotted, line width=0.8pt] (axis cs:1.9656,-1.2)--(axis cs:1.9656,0.40);
+    \node[font=\small, anchor=south west, rotate=90] at (axis cs:2.25,-1.15) {$\tau_d^\star$};
+    \end{axis}
+\end{tikzpicture}

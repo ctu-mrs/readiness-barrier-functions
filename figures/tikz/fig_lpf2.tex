@@ -1,0 +1,90 @@
+% -------- left panel: commanded rate ----------------
+\begin{tikzpicture}
+  \begin{axis}[
+    width=\panelwd, height=\panelht,
+    xmin=0, xmax=2,
+    xlabel={time $t/T_0$},
+    ymode=log,
+    ymin=2e-3, ymax=3e3,
+    ylabel={$\max_i|\dot v_i^{\mathrm{cmd}}|$ $[v^{\mathrm{sat}}/T_0]$},%{peak commanded rate $\max_i|\dot v_i^{\mathrm{cmd}}|$ $[\mathrm{s^{-2}}]$},
+    ytick={1e-2,1e0,1e2},
+    every axis title/.style={font=\small\bfseries},
+    legend style={font=\small, fill=white, fill opacity=0.85, text opacity=1,
+                  at={(0.50,1.10)}, anchor=north, legend cell align=left, legend columns=-1}
+  ]
+  \addplot[cBlue, line width=1.2pt, dashed]
+    table[x=t,y=rate_energy]{data/rate_all.dat};
+    \addlegendentry{effort-min}
+
+  \addplot[cOrange, line width=1.2pt]
+    table[x=t,y=rate_greedy]{data/rate_all.dat};
+    \addlegendentry{greedy DAAM}
+
+  \addplot[cGrey!80, line width=1.2pt]
+    table[x=t,y=rate_lowpass]{data/rate_all.dat};
+    \addlegendentry{low-pass DAAM}
+
+  \addplot[cGreen!70!black, line width=1.4pt]
+    table[x=t,y=rate_cbf]{data/rate_all.dat};
+    \addlegendentry{proposed}
+  \end{axis}
+\end{tikzpicture}%
+\hspace{0.35cm}%
+% -------- right panel: barrier ----------------
+\begin{tikzpicture}
+  \begin{axis}[
+    width=\panelwd, height=\panelht,
+    xmin=0, xmax=2,
+    xlabel={time $t/T_0$},
+    ymin=-0.72, ymax=0.82,
+    ylabel={$h(t)=L(v(t))-\lbar$},
+    ytick={-0.5,-0.25,0,0.25,0.5,0.75},
+    every axis title/.style={font=\small\bfseries},
+    legend style={font=\small, fill=white, fill opacity=0.85, text opacity=1,
+                  at={(0.50,1.10)}, anchor=north, legend cell align=left, legend columns=-1}
+  ]
+  % floor-violation background
+  \addplot[draw=none, fill=cRed!12, forget plot]
+    coordinates {(0,-0.72)(2,-0.72)(2,0)(0,0)};
+  % certified-floor line — single coordinate system, no rel axis cs
+  \draw[cRed, line width=0.8pt]
+    (axis cs:0,0) -- (axis cs:2,0);
+
+  \addplot[cBlue, line width=1.2pt, dashed]
+    table[x=t,y=energy]{data/h_all.dat};
+    \addlegendentry{effort-min}
+
+  \addplot[cOrange, line width=1.2pt]
+    table[x=t,y=greedy]{data/h_all.dat};
+    \addlegendentry{greedy DAAM}
+
+  \addplot[cGrey!80, line width=1.2pt]
+    table[x=t,y=lowpass]{data/h_all.dat};
+    \addlegendentry{low-pass DAAM}
+
+  \addplot[cGreen!70!black, line width=1.0pt]
+    table[x=t,y=cbf]{data/h_all.dat};
+    \addlegendentry{proposed}
+
+  \node[font=\small, cRed, anchor=north west]
+    at (axis cs:0.02,-0.01) {certified floor};
+
+  % \node[font=\small, anchor=north, align=center,
+  %       fill=white, fill opacity=0.85, text opacity=1,
+  %       inner sep=2pt, rounded corners=1pt]
+  %   at (axis cs:1.1,-0.30)
+  %   {greedy: depth $-0.577$, below the floor for $0.629$\,s\\[-2pt]
+  %    low-pass: depth $-0.559$, but for \emph{longer}, $0.756$\,s};
+
+  % \draw[-stealth, cGrey!70!black, line width=0.5pt]
+  %   (axis cs:1.1,-0.31) -- (axis cs:0.86,-0.50);
+
+  % anchor=north east node: rel axis cs replaced with axis cs
+  % \node[font=\small, cGreen!45!black, anchor=north east, align=right,
+  %       fill=white, fill opacity=0.85, text opacity=1,
+  %       inner sep=2pt, rounded corners=1pt]
+  %   at (axis cs:1.96,0.60)
+  %   {the proposed filter never\\[-2pt]enters the region at all\\[-2pt]%
+  %    ($\min_t h=+0.164$)};
+  \end{axis}
+\end{tikzpicture}

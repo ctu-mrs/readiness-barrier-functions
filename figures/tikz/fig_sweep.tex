@@ -1,0 +1,92 @@
+% shared x-axis style to avoid repetition
+\pgfplotsset{sweepaxis/.style={
+  width=\panelwd, height=\panelht,
+  xmin=0.58, xmax=1.28,
+  xlabel={collective ($\times$ sweet-spot value)},
+  xtick={0.6,0.8,1.0,1.2},
+  every axis title/.style={font=\small\bfseries},
+  legend style={font=\small, fill=white, fill opacity=0.85, text opacity=1}
+}}
+% -------- left panel --------
+\begin{tikzpicture}
+  \begin{axis}[sweepaxis,
+    ymin=-1.32, ymax=0.62,
+    ylabel={$\min_t h$ (solid), $\overline{h}$ (dashed)},%{worst-case authority $\min_t h$},
+    ytick={-1.2,-0.8,-0.4,0,0.4},
+    %title={Authority},
+    %title style={at={(0.40,1.10)}, anchor=north west, font=\small\bfseries},
+    legend style={at={(0.50,1.10)}, anchor=south east, anchor=north, legend cell align=left, legend columns=-1}
+  ]
+  % floor-violation background
+  \addplot[draw=none, fill=cRed!12, forget plot]
+    coordinates {(0.58,-1.32)(1.28,-1.32)(1.28,0)(0.58,0)};
+  % non-certifiable column
+  \addplot[draw=none, fill=cGrey!22, forget plot]
+    coordinates {(0.58,-1.32)(0.65,-1.32)(0.65,0.62)(0.58,0.62)};
+  % certified-floor line
+  \draw[cRed, line width=0.8pt] (axis cs:0.58,0) -- (axis cs:1.28,0);
+
+  \addplot[cBlue, mark=*, mark size=1.6pt, line width=1.2pt]
+    table[x=thrust,y=energy_hmin]{data/sweep.dat};
+    \addlegendentry{effort-min}
+  \addplot[cOrange, mark=square*, mark size=1.6pt, line width=1.2pt]
+    table[x=thrust,y=greedy_hmin]{data/sweep.dat};
+    \addlegendentry{greedy DAAM}
+  \addplot[cGrey!80, mark=triangle*, mark size=1.6pt, line width=1.2pt]
+    table[x=thrust,y=lowpass_hmin]{data/sweep.dat};
+    \addlegendentry{low-pass DAAM}
+  \addplot[cGreen!70!black, mark=diamond*, mark size=1.8pt, line width=0.9pt]
+    table[x=thrust,y=cbf_hmin]{data/sweep.dat};
+    \addlegendentry{proposed}
+  % time-averaged readiness margin (dashed, no markers)
+  \addplot[cBlue, dashed, line width=0.7pt, forget plot] table[x=thrust,y=energy_hmean]{data/sweep.dat};
+  \addplot[cOrange, dashed, line width=0.7pt, forget plot] table[x=thrust,y=greedy_hmean]{data/sweep.dat};
+  \addplot[cGrey!80, dashed, line width=0.7pt, forget plot] table[x=thrust,y=lowpass_hmean]{data/sweep.dat};
+  \addplot[cGreen!70!black, dashed, line width=0.7pt, forget plot] table[x=thrust,y=cbf_hmean]{data/sweep.dat};
+
+  \node[font=\small, cRed, anchor=south west]
+    at (axis cs:0.66,-0.10) {certified floor};
+  \node[font=\small, cGrey!70!black, rotate=90, anchor=south, align=center]
+    at (axis cs:0.635,-0.65) {$L^{\mathrm{op}}<\ldrop$};
+  \end{axis}
+\end{tikzpicture}%
+\hspace{0.35cm}%
+% -------- right panel --------
+\begin{tikzpicture}
+  \begin{axis}[sweepaxis,
+    ymode=log,                     % log scale now lives in its own tikzpicture
+    ymin=1.5e-4, ymax=4e-1,
+    ylabel={RMS wrench error},
+    ytick={1e-3,1e-2,1e-1},
+    %title={Tracking},
+    %title style={at={(0.40,1.10)}, anchor=north west, font=\small\bfseries},
+    legend style={at={(0.50,1.10)}, anchor=south east, anchor=north, legend cell align=left, legend columns=-1}
+  ]
+  \addplot[draw=none, fill=cGrey!22, forget plot]
+    coordinates {(0.58,1.5e-4)(0.65,1.5e-4)(0.65,4e-1)(0.58,4e-1)};
+
+  \addplot[cBlue, mark=*, mark size=1.6pt, line width=1.2pt]
+    table[x=thrust,y=energy_werr]{data/sweep.dat};
+    \addlegendentry{effort-min}
+  \addplot[cOrange, mark=square*, mark size=1.6pt, line width=1.2pt]
+    table[x=thrust,y=greedy_werr]{data/sweep.dat};
+    \addlegendentry{greedy DAAM}
+  \addplot[cGrey!80, mark=triangle*, mark size=1.6pt, line width=1.2pt]
+    table[x=thrust,y=lowpass_werr]{data/sweep.dat};
+    \addlegendentry{low-pass DAAM}
+  \addplot[cGreen!70!black, mark=diamond*, mark size=1.8pt, line width=0.9pt]
+    table[x=thrust,y=cbf_werr]{data/sweep.dat};
+    \addlegendentry{proposed}
+
+  % \node[font=\small, anchor=north west, align=left,
+  %       fill=white, fill opacity=0.85, text opacity=1,
+  %       inner sep=2pt, rounded corners=1pt]
+  %   at (axis cs:0.90,0.8e-1)
+  %   {where the barrier is\\[-2pt]\emph{inactive} ($\ge0.9$) the\\[-2pt]%
+  %    filter reproduces its\\[-2pt]nominal allocator exactly};
+  % \draw[-stealth, cGrey!70!black, line width=0.5pt]
+  %   (axis cs:1.0,1.2e-2) -- (axis cs:1.0,3.5e-4);
+  \node[font=\small, cGrey!70!black, rotate=90, anchor=south, align=center]
+  at (axis cs:0.635, 15e-4) {$L^{\mathrm{op}}<\ldrop$};
+  \end{axis}
+\end{tikzpicture}

@@ -1,0 +1,47 @@
+\begin{tikzpicture}
+    \begin{axis}[
+      width=8.5cm, 
+      height=7.5cm, 
+      axis equal image,
+      xmin=-0.45, 
+      xmax=0.45, 
+      ymin=-0.45, 
+      ymax=0.45,
+      xlabel={Roll Wrench Rate $\dot M_x$},
+      ylabel={Pitch Wrench Rate $\dot M_y$},
+      ylabel style={yshift=-0.355cm, xshift=0cm}, %shifting the y line text
+      xlabel style={yshift=0.105cm, xshift=0cm}, %shifting the y line text
+      xtick={-0.3, 0, 0.3}, 
+      ytick={-0.3, 0, 0.3},
+      grid=both, 
+      grid style={dashed, gray!40},
+      legend style={at={(0.98,0.02)}, anchor=south east, font=\scriptsize, legend cell align=left, fill=white, fill opacity=0.9, text opacity=1}
+    ]
+    
+    % 1. Sweet spot
+    \addplot[fill=cBlue!20, draw=cBlue, line width=1pt] table[x=x,y=y]{data/ell_sweet.dat};
+    %\addlegendentry{Sweet spot (Max Authority)}
+    
+    % 2. Stopped rotor
+    \addplot[fill=cOrange!20, draw=cOrange, line width=1pt, dashed] table[x=x,y=y]{data/ell_stopped.dat};
+    %\addlegendentry{Rotor 1 stopped}
+    
+    % 3. Saturated rotor
+    \addplot[fill=cRed!30, draw=cRed, line width=1pt, densely dotted] table[x=x,y=y]{data/ell_sat.dat};
+    %\addlegendentry{Near saturation}
+    
+    % Command vector
+    \draw[-{Latex[length=2mm]}, black, line width=1.2pt] (axis cs:0,0) -- (axis cs:0.20,0.145) node[above left, font=\scriptsize] {$\dot w_{\mathrm{des}}$};
+    
+    % Annotations with pointers connecting the text directly to the physics
+    \node[font=\scriptsize, cOrange!90!black, align=center] (aniso) at (axis cs:-0.27, 0.38) {\textbf{Anisotropic collapse}\\Loss of specific\\directional authority};
+    \draw[-{Latex[length=1.5mm]}, cOrange!90!black, shorten >=2pt, line width=0.6pt] (aniso) -- (axis cs:-0.205, 0.185); 
+    
+    \node[font=\scriptsize, cRed!90!black, align=center] (iso) at (axis cs:0.30, -0.38) {\textbf{Isotropic collapse}\\Severe overall\\headroom loss};
+    \draw[-{Latex[length=1.5mm]}, cRed!90!black, shorten >=2pt, line width=0.6pt] (iso) -- (axis cs:0.03, -0.045); 
+
+    \node[font=\scriptsize, cBlue!90!black, align=center] (sweet) at (axis cs:0.32, 0.38){\textbf{Sweet spot}\\Maximum\\authority}; 
+    \draw[-{Latex[length=1.5mm]}, cBlue!90!black, shorten >=2pt, line width=0.6pt] (sweet) -- (axis cs:0.235, 0.235);
+    
+    \end{axis}
+\end{tikzpicture}

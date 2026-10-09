@@ -1,0 +1,62 @@
+\begin{tikzpicture}[
+        font=\scriptsize, 
+        line width=0.5pt,
+        halo/.style={fill=white, fill opacity=0.8, text opacity=1, inner sep=1.5pt}
+    ]
+    \begin{axis}[
+        width=6.6cm, height=6.6cm,
+        xmin=-1.12, xmax=1.12, ymin=-1.12, ymax=1.12,
+        xlabel={$v_1/v_1^{\mathrm{sat}}$}, ylabel={$v_2/v_2^{\mathrm{sat}}$},
+        xlabel style={yshift=1.5ex},   % <-- Moves x-label UP (closer to axis)
+        ylabel style={yshift=-2.0ex},  % <-- Moves y-label RIGHT (closer to axis)
+        xtick={-1,-0.577,0,0.577,1}, xticklabels={$-1$,$-v^\star$,$0$,$v^\star$,$1$},
+        ytick={-1,-0.577,0,0.577,1}, yticklabels={$-1$,$-v^\star$,$0$,$v^\star$,$1$},
+        tick label style={font=\tiny}, axis equal image,
+        clip mode=individual
+    ]
+    
+    % open feasible box
+    \draw[dashed,cRed!80,line width=0.8pt] (axis cs:-1,-1) rectangle (axis cs:1,1);
+    % \node[cRed,font=\tiny,anchor=south east] at (axis cs:-0.12,0.97)
+    %   {$\partial\Ebar$};
+    
+    % coordinate axes = dropout hyperplanes
+    \draw[cOrange,line width=1pt] (axis cs:-1.12,0)--(axis cs:1.12,0);
+    \draw[cOrange,line width=1pt] (axis cs:0,-1.12)--(axis cs:0,1.12);
+    % \node[cOrange!80!black,font=\tiny,anchor=south west] at (axis cs:-0.01,-1.16) {$v_i=0$};
+    
+    % K_eps
+    \addplot[cGrey!45,line width=0.6pt,fill=cGrey!14] table {data/n2_Keps.dat};
+    % C (four components)
+    \addplot[cBlue,line width=0.8pt,fill=cBlue!28] table {data/n2_C.dat};
+    
+    % labels
+    \node[cGrey!70!black,font=\tiny,anchor=center] at (axis cs:-0.83,0.21) {$K_\varepsilon$};
+    \node[cBlue,font=\scriptsize,anchor=center] at (axis cs:0.577,0.577) {$\Cset$};
+    \node[cBlue,font=\tiny,anchor=center] at (axis cs:-0.577,0.577) {$\Cset$};
+    \node[cBlue,font=\tiny,anchor=center] at (axis cs:-0.577,-0.577) {$\Cset$};
+    \node[cBlue,font=\tiny,anchor=center] at (axis cs:0.577,-0.577) {$\Cset$};
+    
+    % gap brackets
+    \draw[{Latex[length=1.2mm]}-{Latex[length=1.2mm]},cOrange!80!black,line width=0.6pt] 
+      (axis cs:0.0,0.80)--(axis cs:0.28,0.80);
+    %\node[cOrange!80!black,font=\tiny,anchor=west,align=left,halo] at (axis cs:0.28,0.80)
+    %  {uniform distance\\[-2pt]from dropout};
+    
+    \draw[{Latex[length=1.2mm]}-{Latex[length=1.2mm]},cRed,line width=0.6pt] 
+      (axis cs:0.90,0.34)--(axis cs:1.0,0.34);
+    %\node[cRed,font=\tiny,anchor=east,align=right,halo] at (axis cs:0.88,0.34)
+    %  {uniform distance\\[-2pt]from saturation};
+    
+    % normal to boundary
+    \draw[-{Latex[length=1.5mm]},cBlue,line width=0.9pt] (axis cs:0.577,0.86)--(axis cs:0.577,1.02);
+    \node[cBlue,font=\tiny,anchor=south] at (axis cs:0.577,0.98) {$\nabla h$};
+    
+    % crossing (The Greedy Jump)
+    \draw[-{Latex[length=2mm]},cRed,dashed,line width=1pt] 
+      (axis cs:0.40,0.30)..controls (axis cs:0.05,0.0)..(axis cs:0.40,-0.30);
+    \node[cRed,font=\tiny,anchor=north west,align=left] at (axis cs:0.32,-0.25)
+      {$\Delta_k$};
+    
+    \end{axis}
+\end{tikzpicture}

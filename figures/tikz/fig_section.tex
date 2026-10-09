@@ -1,0 +1,78 @@
+\begin{tikzpicture}[font=\scriptsize, line width=0.5pt, ar/.style={-{Latex[length=2mm]}}]
+    \def\W{8.2}   % w-axis half-length x2
+    \def\H{2.55}  % v-axis half-height
+    
+    % ---------- forbidden zones ----------
+    \fill[cOrange!16] (0,-0.62) rectangle (\W,0.62);
+    \fill[pattern=north east lines,pattern color=cRed!30] (0,2.15) rectangle (\W,\H);
+    \fill[pattern=north east lines,pattern color=cRed!30] (0,-\H) rectangle (\W,-2.15);
+    
+    % ---------- certified bands ----------
+    \fill[cBlue!17] (0,0.98) rectangle (\W,1.98);
+    \fill[cBlue!17] (0,-1.98) rectangle (\W,-0.98);
+    \draw[cBlue!70,line width=0.6pt] (0,0.98) -- (\W,0.98);
+    \draw[cBlue!70,line width=0.6pt] (0,1.98) -- (\W,1.98);
+    \draw[cBlue!70,line width=0.6pt] (0,-0.98) -- (\W,-0.98);
+    \draw[cBlue!70,line width=0.6pt] (0,-1.98) -- (\W,-1.98);
+    
+    % ---------- axes ----------
+    \draw[ar] (0,-\H-0.15) -- (0,\H+0.32) node[below left,font=\scriptsize]
+      {$v_k$};
+    \draw[ar] (-0.15,0) -- (\W+0.25,0) node[below left,font=\scriptsize]
+      {$w$};
+    \draw[cGrey!70,dotted] (0,1.48) -- (\W,1.48);
+    \draw[cGrey!70,dotted] (0,-1.48) -- (\W,-1.48);
+    \node[anchor=east,font=\tiny,cGrey!70!black] at (-0.06,1.48) {$+v^\star$};
+    \node[anchor=east,font=\tiny,cGrey!70!black] at (-0.06,-1.48) {$-v^\star$};
+    \node[anchor=east,font=\tiny,cOrange!80!black] at (-0.06,0) {$0$};
+    
+    % ---------- optimal sheets ----------
+    \draw[cGrey!75,line width=1.1pt] plot[smooth,tension=0.7]
+      coordinates {(0.15,1.52)(2.0,1.60)(4.0,1.50)(6.0,1.35)(7.9,1.12)};
+    \draw[cGrey!75,line width=1.1pt] plot[smooth,tension=0.7]
+      coordinates {(0.15,-1.52)(2.0,-1.60)(4.0,-1.50)(6.0,-1.35)(7.9,-1.12)};
+    \node[cGrey!60!black,font=\tiny,anchor=west] at (7.95,1.12) {$\Sigma_+$};
+    \node[cGrey!60!black,font=\tiny,anchor=west] at (7.95,-1.12) {$\Sigma_-$};
+    
+    % ---------- greedy: continuous on a sheet, then a jump ----------
+    \draw[cOrange,line width=1.2pt] plot[smooth,tension=0.7]
+      coordinates {(0.30,1.53)(1.6,1.60)(3.1,1.53)};
+    \draw[cOrange,line width=1.2pt] plot[smooth,tension=0.7]
+      coordinates {(3.1,-1.53)(5.0,-1.44)(7.6,-1.14)};
+    \draw[cOrange,line width=1.2pt,dashed,{Latex[length=1.6mm]}-{Latex[length=1.6mm]}]
+      (3.1,1.49) -- (3.1,-1.49);
+    \fill[cOrange] (3.1,1.53) circle (1.5pt); \fill[cOrange] (3.1,-1.53) circle (1.5pt);
+    %\node[cOrange!85!black,font=\tiny,anchor=west,align=left] at (4.35,0.31)
+    %  {\textbf{greedy}: the selection is \emph{discontinuous} in $w$.\\[-2pt]
+    %   Any realizable transit must instead cross\\[-2pt]$\psi_k=0$ and
+    %   pay $\Delta_k=-\ln(1-\lambda_k)$};
+    
+    % ---------- proposed: continuous, inside one band ----------
+    \draw[cGreen!65!black,line width=1.3pt] plot[smooth,tension=0.7]
+      coordinates {(0.30,1.53)(1.6,1.58)(3.1,1.50)(4.6,1.40)(6.2,1.28)(7.6,1.18)};
+    \fill[cGreen!65!black] (7.6,1.18) circle (1.5pt);
+    %\node[cGreen!45!black,font=\tiny,anchor=south east,align=right] at (7.5,1.47)
+    %  {\textbf{proposed}: continuous, confined\\[-2pt]to one component, $h\ge0$ throughout};
+    
+    % ---------- delta annotation ----------
+    \draw[{Latex[length=1.5mm]}-{Latex[length=1.5mm]},cGreen!45!black,line width=0.6pt] (7.6,1.05) -- (7.9,1.05);
+    \draw[cGreen!45!black, densely dotted] (7.6, 1.18) -- (7.6, 1.05);
+    \draw[cGrey!75, densely dotted] (7.9, 1.12) -- (7.9, 1.05);
+    \node[cGreen!45!black,font=\tiny,anchor=north,align=center] at (7.75,1.02)
+      {slack $\delta$};
+    
+    % ---------- zone labels ----------
+    %\node[cOrange!80!black,font=\tiny,anchor=west,align=left] at (0.12,0.34)
+    %  {$\psi_k\to0$: no sensitivity, $L\le\ldrop$};
+    \node[cOrange!80!black,font=\tiny,anchor=west,align=left] at (0.12,0.34)
+      {zero-crossing (loss of authority)};  
+    %\node[cRed,font=\tiny,anchor=west] at (0.12,2.36) {$|v_k|\to v_k^{\mathrm{sat}}$: no headroom};
+    %\node[cRed,font=\tiny,anchor=west] at (0.12,-2.36) {$|v_k|\to v_k^{\mathrm{sat}}$: no headroom};
+    \node[cRed,font=\tiny,anchor=west] at (0.12,2.36) {motor saturation};
+    \node[cRed,font=\tiny,anchor=west] at (0.12,-2.36) {motor saturation};
+    %\node[cBlue,font=\tiny,anchor=west] at (0.12,1.80) {certified band $\Cset\cap\Sigma_+$};
+    %\node[cBlue,font=\tiny,anchor=west] at (0.12,-1.86) {certified band $\Cset\cap\Sigma_-$};
+    \node[cBlue,font=\tiny,anchor=west] at (0.12,1.80) {certified safe band};
+    \node[cBlue,font=\tiny,anchor=west] at (0.12,-1.83) {certified safe band};
+
+\end{tikzpicture}
