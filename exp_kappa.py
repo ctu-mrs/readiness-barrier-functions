@@ -1,6 +1,14 @@
-"""exp_kappa.py -- how to choose kappa. For each kappa: certified floor, the slack
-L_op - ellbar = (1-kappa)(L_op - ell_drop) left for unmodelled effects, the closed-form
-delay ceiling td*(kappa), and closed-loop cost / robustness."""
+"""exp_kappa.py -- choice of the floor parameter kappa.
+
+For kappa = 0.1 ... 0.9 (hexarotor, amplitude 1.5, collective 0.75 and 0.70):
+  * floor ell_bar, authority above dropout ell_bar - ell_drop, and the slack
+    L_op - ell_bar = (1 - kappa)(L_op - ell_drop) left for unmodelled effects;
+  * the certified delay ceiling td*(kappa), from eta(td*) = slack (see delay_study.py);
+  * nominal closed loop (filter and effort QP), delays of 0.02/0.05/0.1 T0, and
+    20 plants with +-10 % random motor parameters.
+
+Output: results/generated/kappa.json.
+"""
 import numpy as np, json
 import multiprocessing as mp
 from project_paths import result_path
@@ -11,9 +19,10 @@ from robust import perturb_params
 from robust_campaign import rollout
 from delay_study import constants
 from sim_core import run
-P = hexarotor(); ALPHA = 5.0; LMAX = -10.128
+P = hexarotor(); ALPHA = 5.0; LMAX = -10.128   # L_max of the hexarotor, rounded (gate.h_max_point gives -10.12776)
 KAP = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]
 def job(t):
+    """kind "nom": nominal runs at collective arg; "delay": input delay arg; "par": perturbed plant arg."""
     kind, kap, eb, arg = t
     if kind == "nom":
         th = arg; r = run(P, "cbf", eb, amp=1.5, thrust=th); re = run(P, "energy", eb, amp=1.5, thrust=th)
@@ -31,7 +40,7 @@ if __name__ == "__main__":
         eb, ld, hop = floor_rule(P, 1.5, 0.75, kappa=kap)
         eb7, _, hop7 = floor_rule(P, 1.5, 0.70, kappa=kap)
         Hbar = LMAX - eb; avail = hop - eb
-        eta = lambda td: (ALPHA * Hbar + K * V * td) * td + K * V * td / ALPHA
+        eta = lambda td: (ALPHA * Hbar + K * V * td) * td + K * V * td / ALPHA   # delay undershoot bound
         tds = brentq(lambda t: eta(t) - avail, 1e-9, 0.1)
         out["rows"][str(kap)] = dict(eb=eb, ldrop=ld, Lop=hop, auth=eb - ld, slack=avail, tdstar=tds, eb70=eb7, Lop70=hop7)
         tasks += [("nom", kap, eb, 0.75), ("nom", kap, eb7, 0.70)]

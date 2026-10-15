@@ -1,13 +1,27 @@
 """
-allocators.py — four torque-level allocation policies feeding a common
-actuator integrator  vdot = d(v) + M^{-1} tau,  |tau| <= tau_bar.
+allocators.py -- the allocation policies compared in the paper.
 
-Task = wrench tracking of w_des(t). All policies output tau.
+Every policy outputs motor torques tau for the actuator model
 
-  energy_qp   : min ||tau||^2 s.t. servo(Ja=wdot+Kw*wtil); continuous, authority-blind
-  greedy_daam : PD-track the fiberwise argmax_h setpoint v*(w); JUMPS at strata
-  lowpass_daam: PD-track a low-pass-filtered v*(w); smooths jumps but lags -> wrench error
-  cbf         : proposed readiness-CBF QP (barrier + servo + box)
+    dv/dt = d(v) + M^-1 tau,   d(v) = -M^-1 b v|v|,   |tau_i| <= tau_bar_i,
+
+and is asked to track a desired wrench w_des(t) with rate wdot_des(t).
+
+  energy_qp_tau      effort-minimising QP: min ||tau||^2 s.t. wrench servo and torque box.
+                     Continuous, but blind to actuator authority.
+  greedy             PD tracking of the readiness-maximising speeds on the current wrench
+                     fibre (fiber_argmax_h_global). The optimum can jump between sign
+                     patterns, so the setpoint is discontinuous.
+  low-pass           the same setpoint passed through a first-order filter; smooths the
+                     jumps at the cost of wrench error while the filter lags.
+  cbf_qp             proposed filter: stay close to a reference torque (the effort QP)
+                     subject to the readiness barrier, the wrench servo (with slack) and
+                     the torque box.
+  cbf_qp_robust      the same filter evaluated on the worst-case motor parameters of an
+                     uncertainty box, with worst-case drift and a torque reserve.
+
+The greedy and low-pass loops live in the simulators (sim_core.py, harden.py);
+this module provides their setpoint and tracking law.
 """
 import numpy as np
 import scipy.sparse as sp
@@ -19,6 +33,7 @@ phi = lambda v: v * np.abs(v)
 
 
 def _osqp_solve(Pm, q, Am, l, u, warm=None):
+    """Solve min 0.5 x'Pm x + q'x s.t. l <= Am x <= u. Returns (x or None, status, time)."""
     m = osqp.OSQP()
     Pm = sp.csc_matrix(Pm); Am = sp.csc_matrix(Am)
     m.setup(P=Pm, q=q, A=Am, l=l, u=u, verbose=False,
@@ -26,22 +41,28 @@ def _osqp_solve(Pm, q, Am, l, u, warm=None):
     if warm is not None:
         m.warm_start(x=warm)
     r = m.solve()
-    # OSQP >= 1.0 returns a (meaningless) iterate when the problem is infeasible;
-    # report it as None so that callers' explicit fallbacks are triggered.
+    # OSQP >= 1.0 still returns an iterate when the problem is infeasible or the
+    # solver stops early. Accept only "solved" (1) and "solved inaccurate" (2) so
+    # that the callers' fallbacks run otherwise.
     if r.info.status_val not in (1, 2):
         return None, r.info.status_val, r.info.run_time
     return r.x, r.info.status_val, r.info.run_time
 
 
 def _barrier_fallback(gh, tau_limit, J, d, Minv, mu):
-    # Keep the barrier row when the QP solver fails; relax only the wrench task.
+    """Used when the filter QP fails: push every motor along the barrier gradient.
+
+    Readiness has priority, so only the wrench task is given up; delta is the
+    resulting wrench-servo residual.
+    """
     tau = np.sign(gh) * tau_limit
     delta = J @ (d + Minv @ tau) - mu
     return tau, delta
 
 
-# ---------- fiberwise argmax h (setpoint used by greedy / low-pass) ----------
+# ---------- readiness-maximising setpoints on the wrench fibre (greedy / low-pass) ----------
 def fiber_argmax_h(w, P, v0):
+    """Local solution of max h(v) s.t. A phi(v) = w, started from v0 (SLSQP)."""
     A = P["A"]; lim = 0.999 * P["vsat"]
     cons = {"type": "eq", "fun": lambda v: A @ phi(v) - w}
     res = minimize(lambda v: -h_value(v, P), v0,
@@ -51,6 +72,7 @@ def fiber_argmax_h(w, P, v0):
 
 
 def fiber_min_energy(w, P, v0):
+    """Minimum sum of squared thrusts on the fibre (not used by the experiments)."""
     A = P["A"]; lim = 0.999 * P["vsat"]
     cons = {"type": "eq", "fun": lambda v: A @ phi(v) - w}
     res = minimize(lambda v: np.sum(phi(v)**2), v0,
@@ -59,17 +81,29 @@ def fiber_min_energy(w, P, v0):
     return (res.x if res.success else v0)
 
 
-# ---------- torque law that PD-tracks a spin setpoint (shared by 3 baselines) ----------
+# ---------- torque law that tracks a speed setpoint (greedy and low-pass) ----------
 def track_setpoint(v, vstar_sp, P, Kp=60.0):
+    """Feedback-linearising P loop on rotor speed, clipped to the torque box."""
     d = -(np.diag(1 / P["mass"]) @ (P["b"] * phi(v)))
-    tau = P["mass"] * (Kp * (vstar_sp - v) - d)     # feedback-linearizing PD
+    tau = P["mass"] * (Kp * (vstar_sp - v) - d)
     return np.clip(tau, -P["tau_bar"], P["tau_bar"])
 
 
-# ---------- proposed CBF-QP (torque level) ----------
+# ---------- proposed readiness filter (Algorithm 1) ----------
 def cbf_qp(v, w_des, wdot_des, P, ellbar, alpha=5.0, Kw=8.0, rho=1e4, Rreg=1.0,
            tau_ref=None, eta=0.0):
-    """min ||tau-tau_ref||_R^2 + rho||delta||^2  s.t. barrier, servo, box."""
+    """Readiness-barrier QP at torque level.
+
+        min_{tau, delta}  ||tau - tau_ref||^2_R + rho ||delta||^2
+        s.t.  grad_h' (d + M^-1 tau) >= -alpha h + eta          (barrier)
+              J (d + M^-1 tau) - delta = wdot_des + Kw (w_des - A phi(v))   (wrench servo)
+              |tau_i| <= tau_bar_i                              (torque box)
+
+    J = 2 A diag|v| is the Jacobian of the wrench map. The slack delta keeps the
+    QP feasible: when the barrier and the servo conflict, tracking gives way.
+    eta >= 0 tightens the barrier (discrete-time or delay margin).
+    Returns (tau, delta, solver time).
+    """
     n, m = P["n"], P["m"]
     A = P["A"]
     d = -(P["b"] * phi(v)) / P["mass"]
@@ -81,17 +115,16 @@ def cbf_qp(v, w_des, wdot_des, P, ellbar, alpha=5.0, Kw=8.0, rho=1e4, Rreg=1.0,
     mu = wdot_des + Kw * wtil
     if tau_ref is None:
         tau_ref = np.zeros(n)
-    # vars x = [tau (n); delta (m)]
+    # decision variables x = [tau (n); delta (m)]
     Pm = np.zeros((n + m, n + m))
     Pm[:n, :n] = 2 * Rreg * np.eye(n)
     Pm[n:, n:] = 2 * rho * np.eye(m)
     q = np.concatenate([-2 * Rreg * tau_ref, np.zeros(m)])
-    # constraints
     rows_l, rows_u, Arows = [], [], []
-    # barrier: gh^T (d + Minv tau) >= -alpha*h  ->  gh^T Minv tau >= -alpha*h - gh^T d
+    # barrier: grad_h' M^-1 tau >= -alpha h + eta - grad_h' d
     Arows.append(np.concatenate([gh @ Minv, np.zeros(m)]))
     rows_l.append(-alpha * h + eta - gh @ d); rows_u.append(np.inf)
-    # servo (equality as double inequality): J(d+Minv tau) - delta = mu
+    # wrench servo as an equality: J M^-1 tau - delta = mu - J d
     Aeq = np.hstack([J @ Minv, -np.eye(m)])
     beq = mu - J @ d
     for r in range(m):
@@ -110,7 +143,13 @@ def cbf_qp(v, w_des, wdot_des, P, ellbar, alpha=5.0, Kw=8.0, rho=1e4, Rreg=1.0,
 
 
 def energy_qp_tau(v, w_des, wdot_des, P, Kw=8.0):
-    """continuous, authority-blind baseline: min ||tau||^2 s.t. servo + box."""
+    """Effort-minimising baseline: min ||tau||^2 s.t. exact wrench servo and torque box.
+
+    If the requested wrench rate cannot be produced inside the torque box, the
+    servo is relaxed with a heavily weighted slack (least-squares tracking).
+    Also used as the reference torque tau_ref of the readiness filter.
+    Returns (tau, solver time).
+    """
     n, m = P["n"], P["m"]; A = P["A"]
     d = -(P["b"] * phi(v)) / P["mass"]; Minv = np.diag(1 / P["mass"])
     J = 2 * A * np.abs(v)[None, :]
@@ -122,8 +161,7 @@ def energy_qp_tau(v, w_des, wdot_des, P, Kw=8.0):
         e = np.zeros(n); e[i] = 1; Arows.append(e); l.append(-P["tau_bar"][i]); u.append(P["tau_bar"][i])
     x, st, rt = _osqp_solve(Pm, q, np.array(Arows), np.array(l), np.array(u))
     if x is None:
-        # wrench not producible within the torque box: least-squares relaxation
-        # min ||tau||^2 + rho_e ||delta||^2  s.t. J M^-1 tau - delta = mu - J d, box
+        # infeasible: min ||tau||^2 + rho_e ||delta||^2  s.t. J M^-1 tau - delta = mu - J d, box
         rho_e = 1e4
         Pm2 = np.zeros((n + m, n + m)); Pm2[:n, :n] = 2 * np.eye(n); Pm2[n:, n:] = 2 * rho_e * np.eye(m)
         A2 = np.vstack([np.hstack([Aeq, -np.eye(m)]), np.hstack([np.eye(n), np.zeros((n, m))])])
@@ -136,8 +174,12 @@ def energy_qp_tau(v, w_des, wdot_des, P, Kw=8.0):
 
 
 def fiber_argmax_h_global(w, P, seed=0, restarts=6):
-    """Global multi-start fiberwise argmax h (matches corpus multi-start SQP).
-    Represents 'true greedy DAAM': the global optimum, which jumps across strata."""
+    """Multi-start version of fiber_argmax_h: the setpoint of greedy DAAM.
+
+    Starts from +v*, -v* and `restarts` random points and keeps the best local
+    optimum. Because it picks the global optimum it can switch sign pattern from
+    one call to the next, which is the jump the paper discusses.
+    """
     A = P["A"]; lim = 0.999 * P["vsat"]
     rng = np.random.default_rng(seed)
     best = None; bestval = -np.inf
@@ -154,23 +196,27 @@ def fiber_argmax_h_global(w, P, seed=0, restarts=6):
     return best if best is not None else np.full(P["n"], P["vstar"])
 
 
-# ---------- Theorem diagnostics: alignment ratio theta and Slater margin ----------
+# ---------- diagnostics for the feasibility theorem ----------
 def kernel_basis(v, P):
-    """orthonormal basis of ker J(v)."""
+    """Orthonormal basis of ker J(v), the speed directions that leave the wrench unchanged."""
     J = 2 * P["A"] * np.abs(v)[None, :]
     u, s, vt = np.linalg.svd(J)
     r = np.sum(s > 1e-10)
-    return vt[r:].T            # n x (n-r)
+    return vt[r:].T            # n x (n - r)
 
 
 def gamma_theta(v, P):
-    """gamma = max{grad_h^T xi : xi in ker J, |xi_i|<=abar_i}; theta = gamma/||W^{1/2} grad_h||."""
+    """Null-space alignment: gamma = max grad_h' xi over xi in ker J with |xi_i| <= a_bar_i.
+
+    theta = gamma / ||W^(1/2) grad_h|| measures how much readiness can be gained
+    without disturbing the wrench (a small LP, solved with HiGHS).
+    """
     from daam import grad_h as _g, a_bar as _ab
     N = kernel_basis(v, P)
     if N.shape[1] == 0:
         return 0.0, 0.0
     gh = _g(v, P); ab = _ab(v, P)
-    # LP: max (N^T gh)^T z  s.t. |(N z)_i| <= ab_i   -> small LP, solve by scipy linprog
+    # LP in kernel coordinates z: max (N' gh)' z  s.t. |(N z)_i| <= a_bar_i
     from scipy.optimize import linprog
     c = -(N.T @ gh)
     Aub = np.vstack([N, -N]); bub = np.concatenate([ab, ab])
@@ -181,7 +227,7 @@ def gamma_theta(v, P):
 
 
 def hessian_bound(P, nsamp=400, seed=0):
-    """numerical bound on ||Hess h|| over a sweet-spot neighbourhood (for the dt margin)."""
+    """Sampled bound on ||Hess h||_2 for speeds in [0.3, 0.9] v_sat (sizes the discrete-time margin)."""
     from daam import grad_h as _g
     rng = np.random.default_rng(seed); L = 0.0
     for _ in range(nsamp):
@@ -194,9 +240,13 @@ def hessian_bound(P, nsamp=400, seed=0):
     return L
 
 
+# ---------- robust filter ----------
 def worst_case_drift_term(v, gh, P, p):
-    """min_{theta in Theta_p} grad_h^T d(v;theta).  d_i = -b_i v_i|v_i|/m_i is
-    linear in b_i, so the min is attained at an endpoint of [b(1-p), b(1+p)]."""
+    """min over the uncertainty box of grad_h' d(v; theta).
+
+    d_i = -b_i v_i|v_i| / m_i is linear in b_i, so the minimum is reached at an
+    end of [b (1 - p), b (1 + p)], independently for each rotor.
+    """
     ph = v * np.abs(v)
     tot = 0.0
     for i in range(len(v)):
@@ -209,9 +259,17 @@ def worst_case_drift_term(v, gh, P, p):
 def cbf_qp_robust(v, w_des, wdot_des, Pnom, Pworst, ellbar, p,
                   alpha=5.0, Kw=8.0, rho=1e4, Rreg=1.0, tau_ref=None,
                   worst_case_drift=True):
-    """Use the worst-case metric, torque reserve, and optionally drift bound.
+    """Readiness filter that holds for every plant in the +-p parameter box.
 
-    Set ``worst_case_drift=False`` only for the metric-only ablation.
+    Three changes with respect to cbf_qp:
+      * h and grad h are evaluated on the worst-case corner Pworst
+        (tau_bar (1 - p), b (1 + p)), which lower-bounds ln det D over the box;
+      * the drift term in the barrier row is the worst case over the box;
+      * the torque box is shrunk to tau_bar (1 - p), so the commanded torque is
+        available whatever the true limit.
+
+    worst_case_drift=False keeps the nominal drift (and the torque reserve); it is
+    only used for the metric-only ablation.
     """
     from daam import grad_h as _g, h_value as _h
     n, m = Pnom["n"], Pnom["m"]
@@ -219,7 +277,7 @@ def cbf_qp_robust(v, w_des, wdot_des, Pnom, Pworst, ellbar, p,
     ph = v * np.abs(v)
     Minv = np.diag(1 / Pnom["mass"])
     J = 2 * A * np.abs(v)[None, :]
-    gh = _g(v, Pworst)                      # gradient of the ROBUST barrier
+    gh = _g(v, Pworst)                      # gradient of the robust barrier
     h = _h(v, Pworst, ellbar)
     d_nom = -(Pnom["b"] * ph) / Pnom["mass"]
     drift = (worst_case_drift_term(v, gh, Pnom, p) if worst_case_drift
@@ -232,12 +290,14 @@ def cbf_qp_robust(v, w_des, wdot_des, Pnom, Pworst, ellbar, p,
     Pm[:n, :n] = 2 * Rreg * np.eye(n); Pm[n:, n:] = 2 * rho * np.eye(m)
     q = np.concatenate([-2 * Rreg * tau_ref, np.zeros(m)])
     Arows, l, u = [], [], []
-    # The metric-only ablation uses nominal drift but keeps the torque reserve.
+    # barrier row with the chosen drift bound
     Arows.append(np.concatenate([gh @ Minv, np.zeros(m)]))
     l.append(-alpha * h - drift); u.append(np.inf)
+    # wrench servo (nominal model) with slack
     Aeq = np.hstack([J @ Minv, -np.eye(m)]); beq = mu - J @ d_nom
     for r in range(m):
         Arows.append(Aeq[r]); l.append(beq[r]); u.append(beq[r])
+    # reduced torque box
     for i in range(n):
         e = np.zeros(n + m); e[i] = 1.0
         Arows.append(e); l.append(-tau_limit[i]); u.append(tau_limit[i])

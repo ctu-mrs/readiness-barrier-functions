@@ -1,14 +1,21 @@
 """
-daam.py — DAAM co-metric, readiness scalar h, and its closed-form gradient.
+daam.py -- drag-aware actuator-authority co-metric (DAAM), readiness h and its gradient.
 
-D(v)   = 4 A diag(psi) A^T,  psi_i = v_i^2 a_bar_i(v_i)^2   (C-infinity on the regular set)
-h(v)   = logdet D(v) - ell_bar
-grad h : dh/dv_i = 8 v_i a_bar_i (tau_bar_i - 3 b_i v_i^2)/m_i * (A_i^T D^{-1} A_i)
+    psi_i(v) = v_i^2 a_bar_i(v_i)^2
+    D(v)     = 4 A diag(psi(v)) A^T          (smooth wherever every a_bar_i > 0)
+    h(v)     = ln det D(v) - ell_bar         (the readiness barrier, ell_bar = floor)
+
+D(v) describes the set of wrench rates the rotors can produce from the
+current speeds, {x : x^T D^-1 x <= 1}; ln det D is twice its log-volume up to
+a constant. The closed-form gradient is
+
+    dh/dv_i = 8 v_i a_bar_i (tau_bar_i - 3 b_i v_i^2) / m_i * A_i^T D^-1 A_i.
 """
 import numpy as np
 
 
 def a_bar(v, P):
+    """Symmetric acceleration capacity of each rotor (zero at or beyond saturation)."""
     return np.maximum(0.0, (P["tau_bar"] - P["b"] * v**2) / P["mass"])
 
 
@@ -21,12 +28,13 @@ def D_matrix(v, P):
 
 
 def h_value(v, P, ell_bar=0.0):
+    """ln det D(v) - ell_bar; -inf when D is singular (e.g. too many rotors stopped)."""
     s, ld = np.linalg.slogdet(D_matrix(v, P))
     return (ld if s > 0 else -np.inf) - ell_bar
 
 
 def grad_h(v, P):
-    """Closed-form analytic gradient (paper Eq. for grad h)."""
+    """Analytic gradient of h with respect to the rotor speeds."""
     A = P["A"]
     D = D_matrix(v, P)
     Dinv = np.linalg.inv(D)
@@ -37,6 +45,7 @@ def grad_h(v, P):
 
 
 def grad_h_numeric(v, P, eps=1e-6):
+    """Central-difference gradient, used only to check grad_h (see verify.py)."""
     g = np.zeros_like(v)
     for i in range(len(v)):
         vp = v.copy(); vp[i] += eps

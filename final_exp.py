@@ -1,7 +1,13 @@
 """
-final_exp.py — corrected closed-loop evaluation.
-Floor rule:  ellbar = ell_drop + kappa*(h_op_min - ell_drop),  kappa in (0,1),
-requires h_op_min > ell_drop (task-achievable authority above the dropout level).
+final_exp.py -- mission achievability and the floor rule (Proposition 2).
+
+    L_op    = min over the mission of max_{A phi(v) = w(t)} ln det D(v),
+              the best readiness any allocator can keep along the mission;
+    ell_bar = ell_drop + kappa (L_op - ell_drop),   kappa in (0, 1).
+
+The mission is certifiable only when L_op > ell_drop. Every experiment takes
+its floor from floor_rule(). Running the file prints a short closed-loop
+comparison at three moment amplitudes.
 """
 import numpy as np, os
 from project_paths import result_path
@@ -13,12 +19,14 @@ import allocators as AL
 from harden import traj, run
 
 def achievable(P, amp, thrust, T=2.0, npts=20):
+    """L_op of the traj() mission, sampled at npts instants (warm-started SLSQP)."""
     w,_=traj(P,amp,thrust); v0=np.full(P["n"],P["vstar"]); b=[]
     for t in np.linspace(0,T,npts):
         v=AL.fiber_argmax_h(w(t),P,v0); v0=v; b.append(h_value(v,P,0.0))
     return float(np.min(b))
 
 def floor_rule(P, amp, thrust, kappa=0.5):
+    """Return (ell_bar, ell_drop, L_op); ell_bar is None when the mission is not certifiable."""
     ld,_=ell_dagger(P); hop=achievable(P,amp,thrust)
     if hop<=ld: return None, ld, hop
     return ld+kappa*(hop-ld), ld, hop

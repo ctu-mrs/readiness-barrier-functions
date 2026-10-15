@@ -1,7 +1,15 @@
 """
-gate.py — Phase-1 non-vacuity gate.
-Computes h_max, the binding saddle level ell_dagger (single rotor to zero),
-the usable authority window, and the operational-envelope single-component test.
+gate.py -- readiness levels that decide whether a useful floor exists.
+
+    L_max          largest value of ln det D, reached with every rotor at the sweet spot
+    ell_dagger     dropout level (written ell_drop in the paper): the highest ln det D
+                   left when one rotor is stopped and the others sit at the sweet spot
+    gap            L_max - ell_dagger; for identical motors and a symmetric frame
+                   it equals ln(n / (n - m))
+
+A floor ell_bar is meaningful only inside (ell_dagger, L_max]: above
+ell_dagger, keeping h >= 0 rules out stopping any rotor. Running this file
+prints the levels for both platforms.
 """
 import numpy as np
 from daam import h_value, D_matrix, psi
@@ -9,12 +17,13 @@ from scipy.optimize import minimize
 
 
 def h_max_point(P):
-    """Global max of h at all-sweet-spot (psi even in v_i)."""
+    """All rotors at the sweet spot; psi is even in v, so this is the global maximum."""
     v = np.full(P["n"], P["vstar"])
     return v, h_value(v, P)
 
 
 def verify_hmax_random(P, N=200000, seed=0):
+    """Random search over the speed box, to confirm nothing beats h_max_point."""
     rng = np.random.default_rng(seed)
     best = -np.inf
     lim = P["vsat"]
@@ -27,7 +36,11 @@ def verify_hmax_random(P, N=200000, seed=0):
 
 
 def ell_dagger(P):
-    """Binding saddle = highest single-rotor-to-zero level (others at sweet-spot)."""
+    """Dropout level: highest ln det D with one rotor stopped, the others at the sweet spot.
+
+    Returns the level and the per-rotor values. Assumes identical motors; see
+    ell_dagger_exact for the heterogeneous case.
+    """
     pstar = psi(np.full(P["n"], P["vstar"]), P)[0]
     levels = []
     for k in range(P["n"]):
@@ -39,7 +52,7 @@ def ell_dagger(P):
 
 
 def alloc_on_fiber(w, P, v0):
-    """DAAM-optimal allocation on fiber f(v)=w (max h s.t. A phi(v)=w)."""
+    """Readiness-maximising allocation of a fixed wrench: max h(v) s.t. A phi(v) = w."""
     A = P["A"]
     phi = lambda v: v * np.abs(v)
     cons = {"type": "eq", "fun": lambda v: A @ phi(v) - w}
@@ -51,6 +64,7 @@ def alloc_on_fiber(w, P, v0):
 
 
 def report(P):
+    """Print rank, L_max, dropout level and the gap for one platform."""
     print("=" * 64)
     print("PLATFORM:", P["name"], " n=%d m=%d  redundancy=%d"
           % (P["n"], P["m"], P["n"] - P["m"]))
@@ -71,17 +85,14 @@ def report(P):
     return dict(h_max=hmx, ell_dagger=ldag, gap=gap)
 
 
-if __name__ == "__main__":
-    from platforms import hexarotor, tilted_octorotor
-    for P in (hexarotor(), tilted_octorotor()):
-        report(P)
-        print()
-
-
 def weighted_leverage(P):
-    """Exact dropout gaps for HETEROGENEOUS motors:
-       Delta_k = -ln(1 - lam_k),  lam_k = psi*_k A_k^T (A diag(psi*) A^T)^{-1} A_k.
-    Reduces to the unweighted leverage iff all psi*_i coincide."""
+    """Exact dropout gaps for motors that are not identical.
+
+        Delta_k = -ln(1 - lam_k),   lam_k = psi*_k A_k^T (A diag(psi*) A^T)^-1 A_k
+
+    lam_k is the leverage score of column k weighted by psi* at the sweet spot.
+    It reduces to the plain leverage score when every psi*_i is the same.
+    """
     from daam import psi as _psi
     A = P["A"]
     vst = np.sqrt(P["tau_bar"] / (3 * P["b"]))
@@ -94,7 +105,7 @@ def weighted_leverage(P):
 
 
 def ell_dagger_exact(P):
-    """ell_dagger = L_max - min_k Delta_k, using the exact (weighted) gaps."""
+    """Dropout level from the weighted gaps: L_max - min_k Delta_k."""
     from daam import psi as _psi
     A = P["A"]
     vst = np.sqrt(P["tau_bar"] / (3 * P["b"]))
@@ -102,3 +113,10 @@ def ell_dagger_exact(P):
     Lmax = np.linalg.slogdet(4 * (A * ps[None, :]) @ A.T)[1]
     lam, Delta, _ = weighted_leverage(P)
     return Lmax - np.min(Delta), Lmax, Delta
+
+
+if __name__ == "__main__":
+    from platforms import hexarotor, tilted_octorotor
+    for P in (hexarotor(), tilted_octorotor()):
+        report(P)
+        print()

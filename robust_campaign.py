@@ -1,7 +1,10 @@
 """
-robust_campaign.py — does the ROBUST barrier restore the guarantee under
-parametric error? Controller evaluates h on the worst-case corner; the plant is
-a random draw from the same box. 8 draws per level.
+robust_campaign.py -- closed loop with a perturbed plant (used by exp_robust.py).
+
+rollout() simulates one controller on a true plant Ptrue while the controller
+uses Pctrl (and Pworst for the robust filter). Running this file gives the
+small original version of the campaign (8 plants per level); the paper's
+Table III comes from exp_robust.py.
 """
 import numpy as np
 from platforms import hexarotor
@@ -16,6 +19,11 @@ phi = lambda v: v*np.abs(v)
 
 def rollout(Ptrue, Pctrl, ellbar, method, amp=1.5, thrust=0.75, T=1.5, dt=1e-3,
             p=0.0, Pworst=None):
+    """method: "energy", "cbf" (nominal filter) or "cbf-robust". Returns (min h, RMS wrench error).
+
+    Note that exp_robust.py calls this with Pctrl = Pworst and method "cbf" for
+    the robust row, i.e. the nominal filter run on the worst-case model.
+    """
     w, wd = traj(Ptrue, amp, thrust)
     v = AL.fiber_argmax_h(w(0.0), Pctrl, np.full(Pctrl["n"], Pctrl["vstar"]))
     hs = []; we = []
@@ -30,7 +38,7 @@ def rollout(Ptrue, Pctrl, ellbar, method, amp=1.5, thrust=0.75, T=1.5, dt=1e-3,
                     v, wd_, wdd_, Pctrl, Pworst, ellbar, p, tau_ref=tr_)
             else:
                 tau, _, _ = AL.cbf_qp(v, wd_, wdd_, Pctrl, ellbar, tau_ref=tr_)
-        d = -(Ptrue["b"]*phi(v))/Ptrue["mass"]
+        d = -(Ptrue["b"]*phi(v))/Ptrue["mass"]          # the plant uses the true parameters
         v = np.clip(v + dt*(d + tau/Ptrue["mass"]), -0.999*Ptrue["vsat"], 0.999*Ptrue["vsat"])
         # Score robust runs against the metric whose floor the controller certifies.
         barrier_model = Pworst if method == "cbf-robust" else Ptrue

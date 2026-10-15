@@ -1,6 +1,15 @@
-"""exp_delay.py -- delay sweep (Fig. 6) on a denser grid, including delays below the
-certified ceiling, plain vs margined floor, and two buffer initialisations:
-'zeros' (submitted: zero torque for the first tau_d) and 'hold' (torque that holds v(0))."""
+"""exp_delay.py -- input-delay sweep (Fig. 6).
+
+Hexarotor, collective 0.75, amplitude 1.5, filter only. Two families of runs:
+  * plain floor ell_bar, delays from 0 to 0.2 T0, with the delay buffer
+    initialised either with zeros (as in the submitted version) or with the
+    torques that hold v(0) ("hold", the one plotted);
+  * margined floor ell_bar + eta(td), only for td below the certified ceiling
+    td*, where the raised floor still lies below L_op.
+min h is always measured against the original floor ell_bar.
+
+Output: results/generated/delay.json, with the delay constants K1, K2, V and td*.
+"""
 import numpy as np, json
 import multiprocessing as mp
 from project_paths import result_path
@@ -9,8 +18,9 @@ from platforms import hexarotor
 from final_exp import floor_rule
 from delay_study import constants
 from sim_core import run
-P = hexarotor(); ALPHA = 5.0; LMAX = -10.128
+P = hexarotor(); ALPHA = 5.0; LMAX = -10.128   # L_max of the hexarotor, rounded (gate.h_max_point gives -10.12776)
 def job(t):
+    """Run the filter with floor eb_enf and delay td; report min h relative to eb."""
     kind, td, eb_enf, eb, init = t
     r = run(P, "cbf", eb_enf, amp=1.5, thrust=0.75, delay=td, delay_init=init, log=True)
     hm = float(np.min(r["h"] + eb_enf - eb))  # h w.r.t. the ORIGINAL floor
@@ -19,6 +29,7 @@ if __name__ == "__main__":
     eb, ld, hop = floor_rule(P, 1.5, 0.75, kappa=0.5)
     K1, K2, V = constants(P); K = K1 + K2 * float(np.max(P["tau_bar"] / P["mass"]))
     Hbar = LMAX - eb; avail = hop - eb
+    # undershoot bound of the delay proposition; td* is where it uses up the slack L_op - ell_bar
     eta = lambda td: (ALPHA * Hbar + K * V * td) * td + K * V * td / ALPHA
     tds = brentq(lambda t: eta(t) - avail, 1e-9, 0.1)
     D = [0.0, 0.0005, 0.001, 0.0015, 0.002, 0.005, 0.01, 0.02, 0.05, 0.1, 0.15, 0.2]

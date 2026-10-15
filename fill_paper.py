@@ -1,6 +1,16 @@
-"""fill_paper.py -- writes every revision number into main.tex / figure data from results/*.json.
-No number in the revised Section IV is typed by hand except those already in the
-submitted manuscript and re-verified (gap levels, 731 / 14.6 rates, 0.629 / 0.756 s)."""
+"""fill_paper.py -- write the experiment numbers into the manuscript.
+
+Replaces the @KEY@ placeholders of main.tex (table rows and a few sentences)
+with values computed from results/generated/*.json, writes data/ff.dat next to
+the manuscript, and fills the placeholders of figures/tikz/fig_applic.tex.
+Numbers that were already in the submitted manuscript and re-checked (gap
+levels, the 731 / 14.6 rates and the 0.629 / 0.756 s times) are not touched.
+
+This script MODIFIES the manuscript given on the command line; keep a copy.
+Once the placeholders have been replaced, running it again changes nothing.
+
+Usage: python fill_paper.py PATH_TO_MAIN_TEX
+"""
 import json, sys, numpy as np
 from pathlib import Path
 from project_paths import RESULTS_DIR

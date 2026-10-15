@@ -1,5 +1,10 @@
-"""robust_v2.py — metric-robust (nominal drift) vs fully-robust (worst-case drift).
-Tests whether the drift correction matters when the floor is TIGHT."""
+"""robust_v2.py -- ablation of the robust filter (lower block of Table III).
+
+Compares the robust metric with nominal drift ("metric") against the full
+robust filter with worst-case drift ("full"). The floor is tight (kappa = 0.9)
+so that the drift term is not hidden by a conservative floor. roll() is used by
+exp_robust.py; running this file gives the small 8-plant version.
+"""
 import numpy as np
 from platforms import hexarotor
 from daam import h_value
@@ -10,6 +15,7 @@ import allocators as AL
 phi=lambda v: v*np.abs(v)
 
 def roll(Ptrue,Pnom,Pw,ellbar,p,mode,amp=1.5,thrust=0.75,T=1.5,dt=1e-3):
+    """Robust filter on plant Ptrue; mode "metric" or "full". Returns (min robust h, RMS wrench error)."""
     w,wd=traj(Ptrue,amp,thrust)
     v=AL.fiber_argmax_h(w(0.0),Pnom,np.full(Pnom["n"],Pnom["vstar"]))
     hs=[];we=[]

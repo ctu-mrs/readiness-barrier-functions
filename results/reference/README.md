@@ -1,19 +1,19 @@
 # Reference results
 
-These files are the supplied reference outputs for comparison. They are kept separate from `results/generated/`, where experiment scripts write new results. Do not overwrite this directory when running experiments.
+These are the experiment outputs from which the figures and tables of the paper were made. The scripts never write here. New runs go to `results/generated/`.
 
-| File | Contents |
-|---|---|
-| `sweep.json` | Collective-thrust sweep runs and selected floor values (Table I data). |
-| `mc.json` | Randomized mission outcomes for both platforms (Table II data). |
-| `robust.json` | Parameter-mismatch campaign and ablation (Table III data). |
-| `hifi.json` | High-fidelity plant campaign, including delay runs (Table IV data). |
-| `kappa.json` | Floor-selection and delay/parameter sensitivity. |
-| `delay.json` | Delay margin calculations and delay sweep outputs. |
-| `ff.json` | Forward-flight outcomes and airspeed-dependent certifiability. |
-| `timing.json` | Timing measurements from the machine used for that run. |
-| `certmap.dat` | Whitespace-delimited `thrust amp window` certifiability map. |
-| `h_all.dat` | Whitespace-delimited readiness histories for the four allocator variants. |
-| `rate_all.dat` | Whitespace-delimited commanded-rate histories for the four variants. |
+| File | Written by | Content |
+|---|---|---|
+| `sweep.json` | `exp_sweep.py` | Collective sweep and the floor chosen at each collective (Table I, Fig. 3). |
+| `h_all.dat` | `exp_fig5.py` | Readiness histories of the four allocators (Fig. 4, right). |
+| `rate_all.dat` | `exp_fig5.py` | Commanded-rate histories of the four allocators (Fig. 4, left). |
+| `mc.json` | `exp_mc.py` | Randomised missions for both platforms (Table II). |
+| `certmap.dat` | `exp_certmap.py` | Certifiability window over collective and moment amplitude (Fig. 5, left). |
+| `ff.json` | `exp_ff.py` | Forward flight and certifiability as a function of airspeed (Fig. 5, right). |
+| `delay.json` | `exp_delay.py` | Delay constants, certified ceiling and delay sweep (Fig. 6). |
+| `robust.json` | `exp_robust.py` | Parameter-uncertainty campaign and ablation (Table III). |
+| `kappa.json` | `exp_kappa.py` | Floor choice versus delay and parameter sensitivity. |
+| `timing.json` | `exp_timing.py` | QP timing on the computer used for that run. |
+| `hifi.json` | `hifi/run_hifi.py` | High-fidelity campaign, including the delay runs (Table IV). |
 
-The JSON files are machine-readable; the DAT files have a header row with column names. Timing values are hardware-dependent. The files document outputs, not a complete execution environment: consult the repository README for scripts, dependencies, and current limitations. Their original files were left unchanged. No run logs or token-named artifacts are included.
+The `.dat` files are whitespace-separated with a header row. The JSON files load with Python's `json` module. `python make_paper_data.py --results reference` turns these files into the plotting tables in `data/`. The main README describes how a new run compares with them.

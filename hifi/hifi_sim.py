@@ -1,11 +1,17 @@
 """
-hifi_sim.py -- closed-loop high-fidelity simulation: 6-DoF hexarotor + data-driven rotors
-(model.py) + SE(3) attitude/position controller + the four allocators of the paper running
-on the NOMINAL identified model at 500 Hz.
+hifi_sim.py -- high-fidelity closed loop (Table IV).
 
-The allocators are the paper's code, run in the normalised units of the identified model
-(speeds / v_sat, time / T0, torque / tau_bar, wrench / (k_f v_sat^2)); conversion happens
-at the sensor and actuator interfaces only.
+6-DoF hexarotor with data-driven rotors (model.py), an SE(3) attitude/position
+controller and the allocators of the paper running at 500 Hz on the nominal
+quadratic model identified from the same data. The plant is integrated at 2 kHz.
+
+The allocators are the code in allocators.py, run in the normalised units of
+the identified model (speed / v_sat, time / T0, torque / tau_bar, wrench /
+(k_f v_sat^2)); units are converted only at the sensor and actuator interfaces.
+
+Allocators: "energy", "greedy", "lowpass", "cbf" and "robust" (robust filter
+with a +-15 % parameter box). Missions: "rock", "load", "cruise" (and "eight",
+not used in the campaign).
 """
 import sys, os
 import numpy as np
@@ -20,7 +26,7 @@ phi = lambda v: v * np.abs(v)
 
 
 def nominal_platform(nom):
-    """Paper-style parameter dict in normalised units (tau_bar=b=m=1)."""
+    """Platform dict in the format of platforms.py, normalised units (tau_bar = b = m = 1)."""
     n = 6
     return dict(A=nom["A"], n=n, m=4, name="hex-hifi", tau_bar=np.ones(n), b=np.ones(n),
                 mass=np.ones(n), vsat=1.0, vstar=1.0 / np.sqrt(3.0), fz_row=0, mx_row=1, my_row=2)
@@ -101,6 +107,7 @@ class Controller:
 
 
 def feedforward_wrench(ref, p, T, n=40):
+    # Used only to choose the floor before the run; the controller does not see it.
     """Mission wrench set W for Proposition 2, computed offline from the reference.
     Position missions: thrust from differential flatness (incl. body drag) and the
     roll/pitch moments I*(d^2/dt^2) of the flat-output attitude (finite differences)."""
@@ -124,6 +131,7 @@ def feedforward_wrench(ref, p, T, n=40):
 
 
 def floor_from_mission(Pn, Wn, kappa=0.5):
+    """Floor rule of final_exp.floor_rule, applied to a list of normalised mission wrenches."""
     ld, _ = ell_dagger(Pn); v0 = np.full(6, Pn["vstar"]); best = []
     for w in Wn:
         v = AL.fiber_argmax_h(w, Pn, v0); v0 = v; best.append(h_value(v, Pn, 0.0))
@@ -134,6 +142,14 @@ def floor_from_mission(Pn, Wn, kappa=0.5):
 # ---------------------------------------------------------------- simulate
 def simulate(method, kind="rock", mass=1.8, T=6.0, seed=0, kappa=0.5, robust_p=0.15,
              extra_delay=0.0, turb=1.0, mkw=None, log=False, floor=None):
+    """Run one mission with one allocator; returns the summary used by run_hifi.py.
+
+    mass: vehicle mass [kg]; T: duration [s]; seed: telemetry noise and turbulence;
+    extra_delay: added actuation delay [s]; turb: Dryden intensity [m/s];
+    mkw: mission parameters; floor: (eb, ld, hop) to skip the floor rule.
+    h is the readiness of the nominal model at the true speeds, htrue the
+    readiness of the true plant (true_readiness), both relative to the floor.
+    """
     p = M.Params(mass=mass, seed=seed); nom = M.identify_nominal(p); Pn = nominal_platform(nom)
     mkw = mkw or {}
     ref = mission(kind, p, **mkw)
@@ -148,6 +164,7 @@ def simulate(method, kind="rock", mass=1.8, T=6.0, seed=0, kappa=0.5, robust_p=0
         eb, ld, hop = floor
     if eb is None:
         return dict(certifiable=False, ld=ld, hop=hop)
+    # worst-case corner and reduced torque box for the robust filter
     Pw = perturb_params(Pn, robust_p, worst=True); Pbox = dict(Pn); Pbox["tau_bar"] = Pn["tau_bar"] * (1 - robust_p)
     ctrl = Controller(p); rng = p.rng
     gust = M.Dryden(turb, 30.0, 5.0, rng) if turb > 0 else None
@@ -159,6 +176,7 @@ def simulate(method, kind="rock", mass=1.8, T=6.0, seed=0, kappa=0.5, robust_p=0
     if r0["mode"] == "pos": s["x"] = r0["pos"].copy(); s["v"] = r0["vel"].copy()
     wn0 = np.array([p.mass * M.G, 0, 0, 0]) / Ws
     v0n = AL.fiber_argmax_h(wn0, Pn, np.full(6, Pn["vstar"]))
+    # start in hover at the readiness-optimal speeds, with the current that holds them
     w = v0n * vs; cur = (nom["km"] * w * np.abs(w) + p.kt * p.I0 * np.sign(w)) / p.kt
     ncs = int(round(p.dt_ctrl / p.dt)); upd = 10      # greedy re-solve every 10 control steps (50 Hz)
     tel_buf = [w.copy()] * int(round(1e-3 / p.dt))     # 1 ms telemetry delay
@@ -174,11 +192,13 @@ def simulate(method, kind="rock", mass=1.8, T=6.0, seed=0, kappa=0.5, robust_p=0
         # ------------------------------------------------ controller (500 Hz)
         if k % ncs == 0:
             r = ref(t)
+            # speed telemetry: 1 ms old, 0.5 % noise, 10 rpm quantisation
             wm = tel_buf[0] * (1 + p.tel_noise * rng.standard_normal(6))
             wm = np.round(wm / p.tel_quant) * p.tel_quant
             vm = wm / vs
             wc, eR = ctrl(s, r)
             wcn = wc / Ws
+            # the controller gives no wrench rate, so wdot is a filtered finite difference (10 ms)
             if wcmd_prev is not None:
                 raw = (wcn - wcmd_prev) / p.dt_ctrl * T0
                 wdot_f += (p.dt_ctrl / (0.01 + p.dt_ctrl)) * (raw - wdot_f)
@@ -205,13 +225,13 @@ def simulate(method, kind="rock", mass=1.8, T=6.0, seed=0, kappa=0.5, robust_p=0
                 act = int(np.max(np.abs(u - ur)) > 1e-4)
             rate = float(np.max(np.abs(sp - prev_sp)) / (p.dt_ctrl / T0)); prev_sp = sp
             tau_cmd = u * tb
-            if kdel > 0:
+            if kdel > 0:                     # extra delay; holds the hover torque until the buffer fills
                 del_buf.append(tau_cmd)
                 tau_cmd = del_buf.pop(0) if len(del_buf) > kdel else (nom["km"] * w * np.abs(w))
             icmd = tau_cmd / p.kt
             k_ctrl += 1
             # ------------- logging at controller rate (true quantities)
-            if log or True:
+            if log or True:                  # always logged: the summary below needs these
                 vtrue = w / vs
                 LOG["t"].append(t); LOG["h"].append(h_value(vtrue, Pn, eb))
                 LOG["htrue"].append(true_readiness(w, s, p, nom, Vbus, wind) - eb)
@@ -222,15 +242,15 @@ def simulate(method, kind="rock", mass=1.8, T=6.0, seed=0, kappa=0.5, robust_p=0
                 LOG["w"].append(w.copy()); LOG["rate"].append(rate); LOG["act"].append(act)
                 lo, hi = M.current_limits(w, Vbus, p)
                 LOG["sat"].append(float(np.any((icmd >= hi - 1e-6) | (icmd <= lo + 1e-6))))
-        # ------------------------------------------------ plant (4 kHz)
+        # ------------------------------------------------ plant (p.dt = 0.5 ms, i.e. 2 kHz)
         wind = (gust.step(p.dt) if gust is not None else np.zeros(3))
         R = M.rotmat(s["q"])
         vax = axial_inflow(w, s, p, wind)
         Tt, Qt = M.rotor_aero(w, vax, p)
         lo, hi = M.current_limits(w, Vbus, p)
-        cur += p.dt / p.tau_esc * (icmd - cur); cur = np.clip(cur, lo, hi)
+        cur += p.dt / p.tau_esc * (icmd - cur); cur = np.clip(cur, lo, hi)   # ESC current loop
         wdot = (p.kt * cur - Qt - p.kt * p.I0 * np.sign(w)) / p.Jr
-        Ibatt = max(0.0, float(np.sum(cur * (p.kt * w + p.Rm * cur)) / max(Vbus, 1.0)))
+        Ibatt = max(0.0, float(np.sum(cur * (p.kt * w + p.Rm * cur)) / max(Vbus, 1.0)))   # battery current, power balance
         # rigid body
         vair_w = s["v"] - wind; vair_b = R.T @ vair_w
         Fb = np.array([0, 0, Tt.sum()])
@@ -243,7 +263,7 @@ def simulate(method, kind="rock", mass=1.8, T=6.0, seed=0, kappa=0.5, robust_p=0
         Om = s["Om"]
         Mb = Mb - np.array([Om[1] * hrot, -Om[0] * hrot, 0.0]) + np.array([0, 0, p.Jr * np.sum(p.sig * wdot)])
         rr = ref(t)
-        if "Mdist" in rr:
+        if "Mdist" in rr:                    # external moment, and the controller's 20 ms estimate of it
             Mb = Mb + rr["Mdist"]
             s["Mhat"] = s.get("Mhat", np.zeros(3)) + p.dt / 0.02 * (rr["Mdist"] - s.get("Mhat", np.zeros(3)))
         dOm = p.Ibinv @ (Mb - cross3(s["Om"], p.Ib @ s["Om"]))
@@ -254,7 +274,7 @@ def simulate(method, kind="rock", mass=1.8, T=6.0, seed=0, kappa=0.5, robust_p=0
         w = w + p.dt * wdot
         tel_buf.append(w.copy()); tel_buf.pop(0)
         if not np.all(np.isfinite(s["x"])) or np.linalg.norm(s["x"]) > 1e3:
-            break
+            break                            # vehicle lost; "completed" will be False
     L = {k: np.array(v) for k, v in LOG.items()}
     W = L["w"]; sign_changes = int(np.sum(np.abs(np.diff(np.sign(W), axis=0)) > 0))
     out = dict(certifiable=True, eb=eb, ld=ld, hop=hop, T0=T0, vsat=vs,

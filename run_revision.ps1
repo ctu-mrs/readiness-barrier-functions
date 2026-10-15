@@ -1,3 +1,6 @@
+# Run every experiment of the paper in order and write the results to
+# results\generated\ (logs in results\generated\logs\). Takes a few hours on two cores.
+# Set $env:PAPER_TEX to a local main.tex to also check the numbers quoted in the manuscript.
 $ErrorActionPreference = "Stop"
 
 $python = Join-Path $PSScriptRoot ".venv\Scripts\python.exe"
@@ -41,11 +44,13 @@ Invoke-Experiment "exp_robust.py" @("50")
 Invoke-Experiment "exp_mc.py" @("100")
 Invoke-Experiment "hifi\run_hifi.py"
 Invoke-Experiment "export_results_mat.py"
+# plotting tables for the figures, compared with the ones in data\ (see make_paper_data.log)
+Invoke-Experiment "make_paper_data.py" @("--compare", "data")
 
 if ($env:PAPER_TEX) {
     Invoke-Experiment "verify_numbers.py" @($env:PAPER_TEX)
 } else {
-    Write-Host "Skipping manuscript number check; set PAPER_TEX to a local main.tex to run it."
+    Write-Host "Skipping the manuscript check; set PAPER_TEX to a local main.tex to run it."
 }
 
 Write-Host "== done"

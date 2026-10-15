@@ -1,8 +1,17 @@
 """
-harden.py — experiment hardening:
-  H1 discrete-time margin removes the floor undershoot
-  H2 octorotor (n=8,m=6) closed loop
-  H3 alignment ratio theta along the trajectory (tests Thm feasibility condition)
+harden.py -- reference wrench trajectory and the original closed-loop simulator.
+
+traj() is the mission used by every nominal experiment: constant collective
+plus a sinusoidal moment about one axis, whose reversals force a redundant
+allocation to change shape. run() is the simulator of the submitted
+manuscript; sim_core.run() extends it and is what the revision experiments use.
+
+Running the file performs three checks:
+  H1  a discrete-time margin eta on the barrier removes the small undershoot of
+      the sampled-data loop;
+  H2  the same comparison on the tilted octorotor (n = 8, m = 6);
+  H3  the null-space alignment ratio theta along the filter trajectory, against
+      the condition of the feasibility theorem.
 """
 import numpy as np
 from platforms import hexarotor, tilted_octorotor
@@ -13,6 +22,11 @@ phi = lambda v: v*np.abs(v)
 
 
 def traj(P, amp=2.5, thrust=0.5, period=2.0):
+    """Wrench reference w(t) and its rate wd(t).
+
+    Collective = thrust x (collective with every rotor at the sweet spot);
+    moment = amp x 0.25 phi(v*) x sin(2 pi t / period) about the first moment axis.
+    """
     ps = P["vstar"]*abs(P["vstar"]); fz = P["n"]*ps; tr = 0.25*ps
     m = P["m"]
     # wrench layout is platform dependent:
@@ -32,6 +46,11 @@ def traj(P, amp=2.5, thrust=0.5, period=2.0):
 
 def run(P, method, ellbar, eta=0.0, T=2.0, dt=1e-3, amp=2.5, thrust=0.5,
         track_theta=False, seed=0):
+    """Explicit-Euler closed loop of one allocator; returns TV, RMS wrench error and min h.
+
+    TV is the total variation of the speed setpoint (for energy and cbf the
+    setpoint is the current speed). The greedy setpoint is recomputed every 0.02 T0.
+    """
     w, wd = traj(P, amp, thrust)
     v = AL.fiber_argmax_h(w(0.0), P, np.full(P["n"], P["vstar"]))
     N = int(T/dt); UPD = max(1, int(0.02/dt)); hold = v.copy()
@@ -46,14 +65,16 @@ def run(P, method, ellbar, eta=0.0, T=2.0, dt=1e-3, amp=2.5, thrust=0.5,
             sp = hold; tau = AL.track_setpoint(v, sp, P)
         elif method == "lowpass":
             if k % UPD == 0: hold = AL.fiber_argmax_h_global(wd_, P, seed=seed, restarts=2)
-            # first-order filter, time constant 0.05 T0, applied every step.
-            # (submitted version used aa=(UPD*dt)/(0.05+UPD*dt) here -> ~3 ms effective; fixed)
+            # first-order filter with time constant 0.05 T0, applied every step.
+            # The submitted version used aa = (UPD dt)/(0.05 + UPD dt) at every step,
+            # an effective time constant of about 3e-3 T0. Fixed here.
             aa = dt/(0.05 + dt); vlp = (1-aa)*vlp + aa*hold
             sp = vlp; tau = AL.track_setpoint(v, sp, P)
-        else:  # cbf
+        else:  # cbf: the effort-QP torque is the reference the filter stays close to
             tr_, _ = AL.energy_qp_tau(v, wd_, wdd_, P)
             tau, _, _ = AL.cbf_qp(v, wd_, wdd_, P, ellbar, tau_ref=tr_, eta=eta)
         TV += np.sum(np.abs(sp-prev)); prev = sp
+        # motor dynamics, explicit Euler; speeds kept just inside saturation
         d = -(P["b"]*phi(v))/P["mass"]
         v = np.clip(v+dt*(d+tau/P["mass"]), -0.999*P["vsat"], 0.999*P["vsat"])
         werr.append(np.linalg.norm(P["A"]@phi(v)-wd_)); hs.append(h_value(v, P, ellbar))
@@ -68,6 +89,7 @@ if __name__ == "__main__":
     # ---- H1: discrete-time margin ----
     P = hexarotor(); ld, _ = ell_dagger(P); eb = ld + 0.4
     L = AL.hessian_bound(P, nsamp=80)
+    # margin 0.5 L dt n max|vdot|, with max|vdot| taken as 1 in these units
     dt = 1e-3; eta = 0.5*L*dt*P["n"]*1.0
     print("H1  discrete-time margin (hexarotor, dt=%.0e, L=%.1f, eta=%.3f)" % (dt, L, eta))
     for name, e in [("eta=0 (plain)", 0.0), ("eta=margin", eta)]:

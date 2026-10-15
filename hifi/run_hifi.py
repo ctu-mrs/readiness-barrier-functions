@@ -1,5 +1,12 @@
-"""run_hifi.py -- high-fidelity campaign (measured APC 10x4.7SF + X2212-980KV data).
-Writes results/generated/hifi.json."""
+"""run_hifi.py -- high-fidelity campaign (Table IV).
+
+13 mission configurations x 5 allocators x 5 seeds, plus a delay sweep on the
+light-vehicle external-moment mission (effort QP and filter, 3 seeds, 5-40 ms
+of extra delay). Each configuration is (mission, mass [kg], mission parameters).
+Takes about 1-2 h on two cores.
+
+Output: results/generated/hifi.json, a list of records (saved every 10 jobs).
+"""
 import json, sys, numpy as np
 from multiprocessing import Pool
 from hifi_sim import simulate
@@ -17,6 +24,7 @@ DELAYS = [0.0, 0.005, 0.010, 0.020, 0.040]
 KEYS = ["certifiable", "eb", "ld", "hop", "hmin", "htrue_min", "hmean", "tbelow_true", "werr", "eR", "ez",
         "sat", "minabsw", "crossings", "rate_peak", "active", "completed"]
 def job(a):
+    """Simulate one record; numpy scalars are converted so the result is JSON-serialisable."""
     tag, kind, mass, kw, m, seed, dl = a
     r = simulate(m, kind, mass=mass, T=(6.0 if kind == "cruise" else 4.0), mkw=kw, seed=seed, extra_delay=dl)
     return tag, kind, mass, kw, m, seed, dl, {k: (float(r[k]) if isinstance(r.get(k), (float, np.floating)) else r.get(k)) for k in KEYS}

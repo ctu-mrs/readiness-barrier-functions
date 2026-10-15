@@ -1,15 +1,17 @@
 """
-delay_study.py (v2) — input delay, done honestly.
+delay_study.py -- delay constants and a stand-alone delay diagnostic.
 
-Proposition (paper): with applied torque tau*(v(t-tau_d)) and constants
-  K1 = Lip(grad h . d),  K2 = sup||Hess h||,  V = max|vdot|,  Hbar = L_max-ellbar
-on K_eps, the undershoot obeys  h(t) >= -eta(tau_d),
-  eta(td) = (alpha*Hbar + K*V*td)*td + K*V*td/alpha,   K = K1 + K2*max(taubar/m).
-The margined-floor remedy is FEASIBLE only while eta(td) <= L_op - ellbar; the
-certified delay ceiling td* solves eta(td*) = L_op - ellbar.
+Delay proposition of the paper: when the torque applied at t was computed from
+v(t - tau_d), and on K_eps
+    K1 = Lip(grad h . d),  K2 = sup ||Hess h||,  V = max |dv/dt|,  Hbar = L_max - ell_bar,
+the barrier undershoot is bounded, h(t) >= -eta(tau_d), with
+    eta(td) = (alpha Hbar + K V td) td + K V td / alpha,   K = K1 + K2 max(tau_bar / m).
+Raising the floor by eta(td) is possible only while eta(td) <= L_op - ell_bar;
+the certified ceiling td* solves eta(td*) = L_op - ell_bar.
 
-This script computes (K1,K2,V,Hbar,td*), then sweeps the delay empirically to
-actual failure, and applies the margined floor only where it is feasible.
+constants() is used by exp_delay.py and exp_kappa.py. Running this file sweeps
+the delay with its own simulator and writes a diagnostic plot; the paper
+figure is made from exp_delay.py instead.
 """
 import numpy as np, os
 import matplotlib; matplotlib.use("Agg"); import matplotlib.pyplot as plt
@@ -24,6 +26,7 @@ phi=lambda v: v*np.abs(v)
 ALPHA=5.0
 
 def constants(P, lo=0.30, hi=0.85, ntrial=1500, seed=0):
+    """Sampled K1, K2 and V over speeds in [lo, hi] v_sat (forward differences for the derivatives)."""
     rng=np.random.default_rng(seed); K1=K2=0.0
     for _ in range(ntrial):
         v=rng.uniform(lo,hi,size=P["n"])*P["vsat"]
@@ -39,6 +42,7 @@ def constants(P, lo=0.30, hi=0.85, ntrial=1500, seed=0):
     return K1,K2,V
 
 def roll_delay(P,ellbar_enf,ellbar_meas,tau_d,T=2.0,dt=1e-3,amp=1.5,thrust=0.75):
+    """Filter enforcing ellbar_enf with input delay tau_d (zero-torque buffer); min h w.r.t. ellbar_meas."""
     w,wd=traj(P,amp,thrust)
     v=AL.fiber_argmax_h(w(0.0),P,np.full(P["n"],P["vstar"]))
     kd=int(round(tau_d/dt)); buf=[np.zeros(P["n"])]*kd

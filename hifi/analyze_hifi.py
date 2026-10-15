@@ -1,5 +1,11 @@
-"""analyze_hifi.py -- summarise results/hifi.json per mission and per mission family."""
-import json, numpy as np, sys
+"""analyze_hifi.py -- summarise results/generated/hifi.json per mission and per mission family.
+
+summ() is also used by fill_hifi.py and verify_numbers.py. In its output, vt / vn
+are the fractions of runs whose true / nominal readiness went below the floor,
+htmin is the lowest true readiness, nc the number of non-certifiable runs, and
+eR the mean attitude error in degrees.
+"""
+import json, numpy as np
 import os
 import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -10,6 +16,7 @@ def key(r): return (r["kind"], r["mass"], tuple(sorted(r["kw"].items())))
 main = [r for r in D if r["tag"] == "main"]
 confs = sorted({key(r) for r in main}, key=str)
 def summ(rows):
+    """Statistics over the certifiable runs in rows (None if there are none)."""
     c = [r["res"] for r in rows if r["res"]["certifiable"]]
     if not c: return None
     ht = np.array([x["htrue_min"] for x in c]); hn = np.array([x["hmin"] for x in c])

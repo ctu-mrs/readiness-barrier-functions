@@ -1,4 +1,9 @@
-"""Format a TeX table fragment at the explicitly supplied output path."""
+"""fill_hifi.py -- write the body of Table IV as a TeX fragment.
+
+Usage: python hifi/fill_hifi.py PATH_TO_OUTPUT_TEX
+Each mission family gets two rows: violation fraction / lowest true readiness,
+and mean attitude error (a dagger marks non-certifiable runs).
+"""
 import json, numpy as np
 import sys
 from pathlib import Path

@@ -1,22 +1,27 @@
 """
-robust.py — ROBUST readiness barrier.
+robust.py -- parameter boxes for the robust readiness barrier.
 
-Key fact: D(v;theta) = 4 A diag(psi) A^T with psi_i = v_i^2 abar_i^2 and
-abar_i = (taubar_i - b_i v_i^2)/m_i is Loewner-MONOTONE in each psi_i, and
-psi_i is monotone in (taubar_i up, b_i down). Hence over the box
-  taubar_i in [taubar(1-p), taubar(1+p)],  b_i in [b(1-p), b(1+p)]
-the WORST CASE is attained at taubar(1-p), b(1+p), in closed form:
-  abar_i^-(v) = (taubar_i(1-p) - b_i(1+p) v_i^2)/m_i.
-So the robust barrier  h_p(v) = ln det D^-(v) - ellbar  is exact (not conservative
-beyond the box) and costs nothing extra to evaluate.
-Enforcing h_p >= 0 certifies h(v;theta) >= 0 for EVERY theta in the box.
+D(v; theta) = 4 A diag(psi) A^T is monotone (in the Loewner order) in every
+psi_i = v_i^2 a_bar_i^2, and psi_i grows with tau_bar_i and shrinks with b_i
+(while a_bar_i >= 0). Over the box
+    tau_bar_i in [tau_bar (1 - p), tau_bar (1 + p)],   b_i in [b (1 - p), b (1 + p)]
+the smallest D is therefore reached at the corner tau_bar (1 - p), b (1 + p):
+    a_bar_i^-(v) = (tau_bar_i (1 - p) - b_i (1 + p) v_i^2) / m_i.
+The robust barrier h_p(v) = ln det D^-(v) - ell_bar costs the same as the
+nominal one, and h_p >= 0 implies h(v; theta) >= 0 for every theta in the box.
+
+Running the file checks the corner claim against random plants.
 """
 import numpy as np
 from platforms import hexarotor
 
 
 def perturb_params(P, p, worst=True, rng=None):
-    """worst=True -> worst-case corner (taubar low, b high). Else random draw."""
+    """Copy of P with perturbed tau_bar and b.
+
+    worst=True gives the worst-case corner (tau_bar low, b high); otherwise each
+    motor's parameters are drawn uniformly in +-p using rng.
+    """
     Q = {k: (v.copy() if isinstance(v, np.ndarray) else v) for k, v in P.items()}
     if worst:
         Q["tau_bar"] = P["tau_bar"] * (1 - p)
@@ -30,7 +35,7 @@ def perturb_params(P, p, worst=True, rng=None):
 
 
 def verify_worst_case(P, p=0.2, ntrial=4000, seed=0):
-    """Empirically confirm the corner is the minimizer of ln det D over the box."""
+    """Count random plants whose ln det D falls below the corner's at random speeds (should be 0)."""
     from daam import h_value
     rng = np.random.default_rng(seed)
     Pw = perturb_params(P, p, worst=True)

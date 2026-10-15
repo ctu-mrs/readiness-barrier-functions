@@ -1,16 +1,27 @@
-"""exp_ff.py -- non-hover operation: steady forward flight at airspeed V.
-First-order propeller inflow model (blade-element trend, linear in advance ratio):
-   thrust coefficient  c_i = 1 - J_i/J0,  J_i = V_ax,i / (n_i D),  J0 = 0.6
-(J0 = 0.65: zero-thrust advance ratio of the UIUC APC 10x4.7SF tables, see hifi/apc10x47.py).
-V_ax,i is the freestream component along rotor i's induced-flow direction; drag
-torque coefficient is kept constant (its variation is the +-p box of Thm. robust).
-The allocator uses the NOMINAL A; an integral outer loop (gain ki) on the true
-wrench plays the role of the vehicle position/attitude loop.
-Scaling: omega_sat = 767.8 rad/s (7330 rpm, identified in hifi/model.py), D = 0.254 m.
-Octorotor (fully actuated, flies level): drag force F_x = 0.25 W (V/15)^2 commanded
-directly; tilted rotors see heterogeneous inflow.
-Hexarotor (flies tilted by theta = atan(F_x/W)): uniform axial inflow V sin(theta),
-collective W/cos(theta)."""
+"""exp_ff.py -- forward flight up to 15 m/s (Fig. 5, right).
+
+Plant: first-order propeller inflow model, linear in the advance ratio,
+    thrust factor  c_i = 1 - J_i / J0,   J_i = V_ax,i / (n_i D),   J0 = 0.65,
+where J0 is the zero-thrust advance ratio of the APC 10x4.7SF data in
+hifi/apc10x47.py and V_ax,i is the freestream component along rotor i's
+induced flow. The drag-torque coefficient is left unchanged. Speeds are scaled
+with v_sat = 767.8 rad/s (7330 rpm, identified in hifi/model.py) and D = 0.254 m.
+
+Vehicles:
+  octorotor  flies level and commands the drag force F_x = 0.25 W (V/15)^2
+             directly; its tilted rotors see different inflow;
+  hexarotor  tilts by theta = atan(F_x / W) to produce the drag force: uniform
+             axial inflow V sin(theta) and collective W / cos(theta).
+Airspeed ramps from hover to V over TRAMP and is then held.
+
+Allocators: effort QP, greedy DAAM, the filter with the hover model, and an
+airspeed-scheduled filter whose barrier uses the inflow-aware co-metric. All
+use the nominal A; an integral loop on the true wrench (gain ki) stands in for
+the vehicle's position/attitude loop. The floor is the hover design.
+h_s (htrue) is the readiness of the true plant.
+
+Output: results/generated/ff.json (make_paper_data.py writes data/ff.dat from it).
+"""
 import numpy as np, json, sys
 import multiprocessing as mp
 from project_paths import result_path
@@ -22,12 +33,13 @@ from final_exp import floor_rule
 from harden import traj
 from sim_core import run
 phi = lambda v: v * np.abs(v)
-NSD = 767.8 * 0.254 / (2 * np.pi); J0 = 0.65   # v_sat and zero-thrust J of the identified APC 10x4.7SF drive (hifi/)
+NSD = 767.8 * 0.254 / (2 * np.pi); J0 = 0.65   # n_sat * D [m/s] at v_sat, and the zero-thrust advance ratio
 SPEEDS = [0, 3, 6, 9, 12, 15]
 TEND = 14.0
 
-TRAMP = 10.0   # ~1 s for T0 ~ 0.1 s: 0.9 g to reach 9 m/s, 1.5 g to reach 15 m/s
+TRAMP = 10.0   # ramp time in T0 (about 1 s with T0 ~ 0.1 s): 0.9 g to reach 9 m/s, 1.5 g for 15 m/s
 def sstep(t):
+    """Smoothstep from 0 to 1 over [0, TRAMP]."""
     x = np.clip(t / TRAMP, 0.0, 1.0); return x * x * (3 - 2 * x)
 
 def make(name, V, amp=1.5, thrust=0.9, period=2.0, ramp=True):
@@ -37,7 +49,10 @@ def make(name, V, amp=1.5, thrust=0.9, period=2.0, ramp=True):
     w0, wd0 = traj(P, amp, thrust, period)
     W = thrust * P["n"] * P["vstar"] ** 2
     Vt = (lambda t: V * sstep(t)) if ramp else (lambda t: V)
-    Fd = lambda t: 0.25 * W * (Vt(t) / 15.0) ** 2
+    Fd = lambda t: 0.25 * W * (Vt(t) / 15.0) ** 2      # body drag force
+    # Aeff: true wrench map (columns scaled by the thrust factor c_i);
+    # slope: d(thrust)/d(v) ratio true/nominal, used by the true readiness.
+    # Both factors are clipped to [0.2, 1.5].
     if name == "oct":
         xd = P["A"][0, :]  # x-component of each thrust direction d_i
         def w(t): x = w0(t); x[0] += Fd(t); return x
@@ -57,6 +72,7 @@ def make(name, V, amp=1.5, thrust=0.9, period=2.0, ramp=True):
             J = Vt(t) * np.sin(th(t)) / (NSD * np.maximum(np.abs(v), 1e-3)) * np.ones_like(v)
             return np.clip(1 - J / (2 * J0), 0.2, 1.5)
     def wd(t, e=1e-5):
+        # rate of the forward-flight part by central differences
         return wd0(t) + ((w(t + e) - w0(t + e)) - (w(t - e) - w0(t - e))) / (2 * e) if t > e else wd0(t)
     Aeff.slope = slope
     return P, (w, wd), Aeff
@@ -77,16 +93,19 @@ def Lop_true(P, wfun, Aeff, T=2.0, npts=20, metric=None):
 
 
 # ----------------------------------------------------------------------------------
-# Airspeed-scheduled filter: barrier on the inflow-aware co-metric
-#   D_V(v,t) = 4 A diag(s_i(v_i,V(t))^2 psi_i(v_i)) A^T,  s_i = true/nominal thrust slope,
-# servo row with the inflow-aware Jacobian 2 A diag(|v| s); dh/dt from the known V(t).
+# Airspeed-scheduled filter: the barrier uses the inflow-aware co-metric
+#   D_V(v, t) = 4 A diag(s_i(v_i, V(t))^2 psi_i(v_i)) A^T,  s_i = true/nominal thrust slope,
+# the servo row uses the true Jacobian, and dh/dt includes the known airspeed change.
+# Gradients are taken by central differences.
 import scipy.sparse as sps
 from daam import psi as psif
 def h_aware(v, t, P, Ae, eb):
+    """Inflow-aware readiness ln det D_V(v, t) - eb."""
     s = Ae.slope(v, t); D = 4.0 * (P["A"] * (s ** 2 * psif(v, P))[None, :]) @ P["A"].T
     sg, ld = np.linalg.slogdet(D); return (ld if sg > 0 else -np.inf) - eb
-def thrust_true(v, t, Ae): return Ae(v, t) @ phi(v)
+def thrust_true(v, t, Ae): return Ae(v, t) @ phi(v)   # true wrench
 def aware_step(v, t, wc, wdc, P, Ae, eb, alpha=5.0, Kw=8.0, rho=1e4, e=1e-6):
+    """One step of the airspeed-scheduled filter: returns (tau, |delta|, active, h)."""
     import allocators as AL
     n, m = P["n"], P["m"]
     h = h_aware(v, t, P, Ae, eb)
@@ -112,6 +131,7 @@ def aware_step(v, t, wc, wdc, P, Ae, eb, alpha=5.0, Kw=8.0, rho=1e4, e=1e-6):
     return np.clip(x[:n], -P["tau_bar"], P["tau_bar"]), np.linalg.norm(x[n:]), int(np.max(np.abs(x[:n] - tr)) > 1e-5), h
 
 def run_aware(name, V, eb, T=5.0, dt=1e-3, ki=2.0):
+    """Closed loop with the airspeed-scheduled filter; same outputs as job() below."""
     import allocators as AL
     P, (w, wd), Ae = make(name, V)
     v = AL.fiber_argmax_h(w(0.0), P, np.full(P["n"], P["vstar"])); z = np.zeros(P["m"])
@@ -141,6 +161,7 @@ def v_lower(P, eb):
             pv = ps.copy(); pv[k] = x
             return np.linalg.slogdet(4.0 * (P["A"] * pv[None, :]) @ P["A"].T)[1] - eb
         eps = brentq(g, 1e-12, ps[k])
+        # smallest speed in (0, v*] with psi >= eps (the broadcast just evaluates psi on vv)
         vv = np.linspace(1e-4, vs[k], 20001); lo.append(vv[np.argmax(psif(np.full(P["n"], 1.0) * 0 + vv[:, None] * 0 + vv[:, None], P)[:, k] >= eps)])
     return float(min(lo))
 
@@ -155,6 +176,7 @@ def shift_for(name, V, eb):
     return -2 * P["m"] * np.log(worst), vl, worst
 
 def job(t):
+    """Run one allocator at airspeed V; h and h_s are reported against the hover floor."""
     name, V, m, eb, shift = t
     if m == "cbf_aware":
         return t, run_aware(name, V, eb, T=TEND)
@@ -179,8 +201,9 @@ if __name__ == "__main__":
         out[name] = dict(eb=eb, ldrop=ld, Lop_hover=hop, speeds={})
         for V in SPEEDS:
             P, wf, Ae = make(name, V, ramp=False)
-            lop = Lop_true(P, wf, Ae)
+            lop = Lop_true(P, wf, Ae)                    # nominal metric, true wrench map
             sh, vl, smin = shift_for(name, V, eb)
+            # true (inflow-aware) metric at the held airspeed; Lop_s - eb < 0 means not certifiable
             lop_s = Lop_true(P, wf, Ae, metric=lambda v: h_aware(v, 1e9, P, Ae, 0.0))
             out[name]["speeds"][str(V)] = dict(Lop=lop, window=lop - eb, Lop_s=lop_s, shift=sh, vlow=vl, smin=smin)
             print(name, V, "Lop_s-ellbar %+.3f Lop_true %.3f  Lop-ellbar %+.3f  shift %.3f (vlow %.3f smin %.3f)" % (lop_s - eb, lop, lop - eb, sh, vl, smin), flush=True)

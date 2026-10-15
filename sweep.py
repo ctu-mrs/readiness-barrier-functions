@@ -2,6 +2,9 @@
 sweep.py — demand sweep: torque amplitude vs allocator behavior.
 Shows greedy DAAM total variation blowing up (stratum jumps switching on) while
 the CBF filter stays bounded and floor-respecting. Produces figure + table.
+
+Development script, not used for the paper. Its low-pass baseline still uses the
+original filter constant a = (UPD dt)/(0.05 + UPD dt) at every step; see harden.py.
 """
 import os, numpy as np
 import matplotlib; matplotlib.use("Agg"); import matplotlib.pyplot as plt

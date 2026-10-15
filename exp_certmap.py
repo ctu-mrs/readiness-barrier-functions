@@ -1,5 +1,12 @@
-"""exp_certmap.py -- which missions are certifiable? Window width L_op - ell_drop over
-(collective, moment amplitude); negative = no allocator can hold any floor above ell_drop."""
+"""exp_certmap.py -- certifiability map (Fig. 5, left).
+
+Window L_op - ell_drop of the hexarotor over a grid of collective (0.55 ... 1.30)
+and moment amplitude (0.5 ... 3.0). Where it is negative no allocator can keep
+any floor above the dropout level for that mission.
+
+Output: results/generated/certmap.dat (columns thrust, amp, window; one blank
+line after each collective, as pgfplots' matrix plot expects).
+"""
 import numpy as np, json
 import multiprocessing as mp
 from project_paths import result_path
@@ -9,6 +16,7 @@ from gate import ell_dagger
 P = hexarotor(); ld, _ = ell_dagger(P)
 TH = np.round(np.arange(0.55, 1.301, 0.05), 3); AM = np.round(np.arange(0.5, 3.01, 0.25), 3)
 def job(x):
+    """Window at one grid point; NaN if the fibre optimisation fails."""
     th, a = x
     try: return th, a, achievable(P, a, th) - ld
     except Exception: return th, a, np.nan

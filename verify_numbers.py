@@ -1,8 +1,15 @@
-"""verify_numbers.py -- independent check: every revision number quoted in Section IV
-of main.tex is recomputed from results/*.json and searched for in the source."""
+"""verify_numbers.py -- check the numbers quoted in the manuscript against the results.
+
+Every number of Section IV that comes from an experiment is recomputed from
+results/generated/*.json, formatted as in the text, and searched for in
+main.tex. Missing strings are listed and the exit code is 1. The manuscript is
+only read.
+
+Usage: python verify_numbers.py PATH_TO_MAIN_TEX
+"""
 import json, re, numpy as np, sys
 from pathlib import Path
-from project_paths import RESULTS_DIR
+from project_paths import RESULTS_DIR, ROOT
 
 if len(sys.argv) != 2:
     raise SystemExit("Usage: python verify_numbers.py PATH_TO_MAIN_TEX")
@@ -12,7 +19,7 @@ tex = PAPER_TEX.read_text()
 sw = json.load(open(RESULTS_DIR / "sweep.json")); mc = json.load(open(RESULTS_DIR / "mc.json")); rb = json.load(open(RESULTS_DIR / "robust.json"))
 kp = json.load(open(RESULTS_DIR / "kappa.json")); dl = json.load(open(RESULTS_DIR / "delay.json")); ff = json.load(open(RESULTS_DIR / "ff.json")); tm = json.load(open(RESULTS_DIR / "timing.json"))
 checks = []
-def need(s, why): checks.append((s in tex, s, why))
+def need(s, why): checks.append((s in tex, s, why))   # s must appear verbatim in main.tex
 g = lambda th, m, k: sw["runs"]["%s_%s" % (th, m)][k]
 # Table I rows
 for th in ["0.7", "0.8", "0.9", "1.0", "1.1", "1.2"]:
@@ -55,7 +62,7 @@ need("up to $%.2f$" % max(max(oc[V]["cbf"]["werr"], oc[V]["cbf_aware"]["werr"]) 
 assert hx["12"]["cbf_aware"]["htrue_min"] >= -2e-3 and max(hx[V]["cbf_aware"]["werr"] for V in ["0","3","6","9","12"]) < 3e-2
 assert min(oc[V]["cbf_aware"]["htrue_min"] for V in oc) >= -0.0035 and min(oc[V]["cbf"]["htrue_min"] for V in oc) >= -0.0035
 # high-fidelity campaign
-import sys; sys.path.insert(0, "hifi")
+sys.path.insert(0, str(ROOT / "hifi"))
 from analyze_hifi import main as HM, summ, D as HD
 fam = lambda k, m: summ([r for r in HM if r["kind"] == k and r["method"] == m])
 assert fam("rock", "cbf")["vt"] == 0 and fam("load", "cbf")["vt"] == 0

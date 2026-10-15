@@ -1,5 +1,14 @@
-"""exp_mc.py -- Monte-Carlo over randomized certifiable missions (hexarotor and octorotor),
-four allocators. Reports violation rate, h_min, wrench error with 95% CIs."""
+"""exp_mc.py -- randomised missions (Table II).
+
+Collective and moment amplitude are drawn uniformly in four boxes: the normal
+envelope and an authority-scarce corner, for the hexarotor and the octorotor.
+Draws that are not certifiable are rejected and counted. Each accepted mission
+is run with the four allocators for 1.5 T0.
+
+Usage: python exp_mc.py [N]   (N hexarotor missions per box, N/2 for the octorotor; default 100)
+Output: results/generated/mc.json; the summary (violation rate, mean h_min and
+RMS wrench error with 95 % normal intervals) is printed.
+"""
 import numpy as np, json, sys
 from multiprocessing import Pool
 from project_paths import result_path
@@ -7,6 +16,7 @@ from platforms import hexarotor, tilted_octorotor
 from final_exp import floor_rule
 from sim_core import run, METHODS
 def draw(name, N, thr, amp, seed0):
+    """Draw N certifiable missions (collective in thr, amplitude in amp); return them and the rejections."""
     P = hexarotor() if name == "hex" else tilted_octorotor()
     rng = np.random.default_rng(seed0); out = []; rej = 0
     while len(out) < N:
@@ -16,6 +26,7 @@ def draw(name, N, thr, amp, seed0):
         out.append((name, len(out), th, a, eb))
     return out, rej
 def job(x):
+    """Run the four allocators on one mission; the mission index is also the greedy seed."""
     name, i, th, a, eb = x
     P = hexarotor() if name == "hex" else tilted_octorotor()
     res = {}
@@ -25,6 +36,7 @@ def job(x):
     return name, i, th, a, eb, res
 if __name__ == "__main__":
     N = int(sys.argv[1]) if len(sys.argv) > 1 else 100
+    # key: (platform, number of missions, collective range, amplitude range, seed)
     sets = {"hex_env": ("hex", N, (0.7, 1.2), (1.0, 2.0), 1),
             "hex_scarce": ("hex", N, (0.68, 0.82), (1.0, 2.0), 2),
             "oct_env": ("oct", N//2, (0.7, 1.2), (1.0, 2.0), 3),
@@ -34,7 +46,7 @@ if __name__ == "__main__":
         missions, rej = draw(name, n, thr, amp, s0)
         with Pool(2) as pool: rr = pool.map(job, missions)
         allres[key] = {"rejected": rej, "missions": [dict(th=r[2], amp=r[3], eb=r[4], res=r[5]) for r in rr]}
-        json.dump(allres, open(result_path("mc.json"), "w"))
+        json.dump(allres, open(result_path("mc.json"), "w"))   # saved after each box
         print(key, "rejected", rej, flush=True)
         for m in METHODS:
             h = np.array([x[5][m]["hmin"] for x in rr]); e = np.array([x[5][m]["werr"] for x in rr])

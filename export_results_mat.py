@@ -1,4 +1,9 @@
-"""export_results_mat.py -- mirror every revision result (results/*.json, *.dat) to MATLAB .mat."""
+"""export_results_mat.py -- copy every result in results/generated (*.json, *.dat) into one MATLAB file.
+
+JSON keys are made valid MATLAB field names (dots and dashes become
+underscores, a "k_" prefix is added when a key starts with a digit).
+Output: results/generated/revision_results.mat.
+"""
 import json, os, glob, numpy as np
 from scipy.io import savemat
 from project_paths import RESULTS_DIR, result_path

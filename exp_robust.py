@@ -1,8 +1,17 @@
-"""exp_robust.py -- robustness campaign, NR plants per level (submitted version: 8).
-Paired design: within each level all controllers run on the SAME NR random plants
-(the submitted campaign drew different plants for each controller).
-Upper block: robust_campaign.rollout (energy / nominal barrier / robust barrier).
-Lower block: robust_v2.roll at kappa=0.9 (metric bound only vs full robust filter)."""
+"""exp_robust.py -- motor-parameter uncertainty (Table III).
+
+For p = 10, 20, 30 % the true tau_bar_i and b_i are drawn uniformly in +-p
+around nominal (NR plants per level; the submitted version used 8). All
+controllers of a level run on the same plants, so the comparison is paired.
+  * campaign: effort QP, nominal filter (nominal floor) and robust filter
+    (floor from the worst-case corner, kappa = 0.5);
+  * ablation at kappa = 0.9: robust metric with nominal drift ("metric") vs the
+    full robust filter ("full").
+Violation rates come with Wilson 95 % intervals.
+
+Usage: python exp_robust.py [NR]   (default 50)
+Output: results/generated/robust.json.
+"""
 import numpy as np, json, sys
 import multiprocessing as mp
 from project_paths import result_path
@@ -16,6 +25,7 @@ P = hexarotor()
 
 
 def run_task(t):
+    """Pt: true plant, Pc: controller model (nominal, or worst corner for the robust filter)."""
     kind, p, label, Pt, Pc, eb, mth = t
     if kind == "camp":
         return kind, p, label, rollout(Pt, Pc, eb, mth)

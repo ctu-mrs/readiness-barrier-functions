@@ -1,3 +1,9 @@
+"""audit3.py -- checks behind the robust barrier (not needed for the paper).
+
+F: enforcing the robust metric with nominal drift leaves an uncontrolled
+drift mismatch, hence the worst-case drift term;  G: a_bar^- >= 0 only on a
+smaller speed box.
+"""
 import numpy as np
 from platforms import hexarotor
 from daam import grad_h, h_value, a_bar

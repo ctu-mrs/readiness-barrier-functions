@@ -1,40 +1,54 @@
 # Readiness Barrier Functions
 
-This repository contains Python simulations for the manuscript “Readiness Barrier Functions: Forward-Invariant Control Authority for Overactuated Multirotor Allocation,” which is under review. The central method treats the log-determinant of a drag-aware actuator-authority co-metric as a control barrier and enforces an authority floor in a torque-level quadratic program (QP). The simulations compare that filter with effort-minimizing, greedy readiness-maximizing, and low-pass-filtered allocators.
+Simulation code for the paper *"Readiness Barrier Functions: Forward-Invariant Control Authority for Overactuated Multirotor Allocation"* (under review).
 
-The code covers a coplanar hexarotor and a tilted octorotor, randomized missions, parameter uncertainty, delay, forward flight, and a higher-fidelity 6-DoF simulation using propeller and motor data. It is simulation research code, not a flight-ready controller. The manuscript and its figure source are not part of this repository. The supplied reference outputs are retained separately from new runs.
+The paper uses the log-determinant of a drag-aware actuator-authority co-metric (DAAM) as a control barrier function. A torque-level quadratic program keeps this readiness measure above a floor while the vehicle tracks its wrench command. This repository contains the models, the allocators and every experiment in the paper. It also contains the data and TikZ sources of the figures, and a script that rebuilds those data from the experiment outputs.
 
-## Model and code
+All results come from simulation. The code is research code, not a flight controller.
 
-The signed-quadratic thrust map is $f(v)=A(v\odot|v|)$, and the readiness metric is computed from $D(v)=4A\operatorname{diag}(v_i^2\bar a_i^2)A^\top$. The implementation follows that model directly; the paper’s continuous-time invariance statements should not be read as guarantees for the discretized simulator, the high-fidelity plant, or real hardware.
+## The model in brief
 
-| File or folder | Role |
+Each rotor *i* has a signed speed $v_i$, produces thrust and drag torque proportional to $v_i|v_i|$, and obeys
+
+$$m_i\dot v_i = -b_i v_i|v_i| + \tau_i,\qquad |\tau_i|\le\bar\tau_i .$$
+
+The wrench is $w = A\,\phi(v)$ with $\phi(v)=v\odot|v|$. The symmetric acceleration capacity $\bar a_i(v)=(\bar\tau_i-b_iv_i^2)/m_i$ gives the co-metric
+
+$$D(v) = 4A\,\mathrm{diag}(v_i^2\bar a_i^2)\,A^\top ,\qquad h(v)=\ln\det D(v)-\bar\ell .$$
+
+$D(v)$ describes the wrench rates the rotors can still produce from their current speeds. The filter (Algorithm 1, `allocators.cbf_qp`) enforces $\dot h\ge-\alpha h$ together with the wrench servo and the torque limits. A slack variable lets tracking give way when the two conflict.
+
+The simulators use nondimensional units: $\bar\tau=b=m=1$, so speeds are in units of $v^{\mathrm{sat}}$ and time is in units of $T_0=m/\sqrt{\bar\tau b}$. The sweet spot is $v^\star=v^{\mathrm{sat}}/\sqrt3$. The continuous-time guarantees in the paper apply to the model. The simulators check them in discrete time, and the high-fidelity study checks what is left of them on a plant the model does not describe exactly.
+
+## Repository layout
+
+| Path | Content |
 |---|---|
-| `platforms.py` | Hexarotor/octorotor allocation matrices and nominal motor parameters. |
-| `daam.py`, `gate.py` | Co-metric, readiness and gradient; dropout gap and mission-floor calculations. |
-| `allocators.py` | Effort QP, fiberwise readiness optimizer, low-pass baseline, nominal and robust barrier QPs. |
-| `harden.py`, `sim_core.py` | Wrench trajectories and closed-loop simulation used by the revision experiments. |
-| `final_exp.py` | Mission-achievability calculation and floor selection. |
-| `exp_*.py` | Main sweep, mission, robustness, delay, forward-flight, and timing runs. |
-| `robust.py`, `robust_campaign.py`, `robust_v2.py` | Uncertainty sampling, robust invariance campaign, and metric-only ablation. |
-| `hifi/` | Measured-component model, 6-DoF simulator, campaign runner, and result summaries; see [hifi/README.md](hifi/README.md). |
-| `make_all_figs.py`, `concept_figs.py`, `make_figs.py`, `thrust_sweep.py`, `make_sim_fig.py`, `delay_study.py`, `lpf_analysis.py` | Standalone diagnostic plots and their data. They do not regenerate every paper figure. |
-| `verify.py` | Analytic-gradient and gap-law checks; no test framework is configured. |
-| `verify_numbers.py`, `fill_paper.py`, `hifi/fill_hifi.py` | Optional manuscript consistency/export helpers. They require explicit local manuscript paths; `fill_paper.py` writes to the manuscript and is not run by the experiment runner. |
-| `project_paths.py` | Repository-local generated result and figure paths. |
-| `results/reference/` | Curated, read-only comparison outputs from the supplied result set. |
-| `figures/tikz/`, `data/` | TikZ figure fragments referenced by the manuscript and their required plotting tables. The manuscript itself is not included. |
+| `platforms.py` | Allocation matrices of the coplanar hexarotor (n = 6, m = 4) and the tilted octorotor (n = 8, m = 6). |
+| `daam.py` | Co-metric $D(v)$, readiness $h(v)$ and its analytic gradient. |
+| `gate.py` | Maximum readiness, dropout level $\ell_{\mathrm{drop}}$ and dropout gaps. |
+| `allocators.py` | Effort-minimising QP, greedy and low-pass DAAM setpoints, the readiness filter and its robust version. |
+| `harden.py`, `sim_core.py` | Reference mission and closed-loop simulators. `sim_core.run` is the one used by the experiments. |
+| `final_exp.py` | Mission achievability $L^{\mathrm{op}}$ and the floor rule $\bar\ell=\ell_{\mathrm{drop}}+\kappa(L^{\mathrm{op}}-\ell_{\mathrm{drop}})$. |
+| `robust.py`, `robust_campaign.py`, `robust_v2.py` | Parameter boxes, perturbed-plant rollouts and the robust ablation. |
+| `delay_study.py` | Constants of the delay bound (used by `exp_delay.py` and `exp_kappa.py`). |
+| `exp_*.py` | The experiments of the paper, one script per study (see below). |
+| `hifi/` | High-fidelity 6-DoF simulator built from measured propeller and motor data ([hifi/README.md](hifi/README.md)). |
+| `make_paper_data.py` | Rebuilds every table in `data/` from the experiment outputs. |
+| `figures/tikz/`, `data/` | TikZ/PGFPlots sources of the paper figures and the tables they plot. |
+| `results/reference/` | The experiment outputs used for the paper ([results/reference/README.md](results/reference/README.md)). |
+| `verify.py` | Checks the analytic gradient and the dropout-gap law. |
+| `verify_numbers.py`, `fill_paper.py`, `hifi/fill_hifi.py` | Helpers that check or write the numbers in the manuscript (the manuscript is not included). |
+| `export_results_mat.py` | Copies all results into one MATLAB `.mat` file. |
+| `project_paths.py` | Output locations. |
 
-The current implementation includes several corrections documented in the earlier project notes: the low-pass baseline applies its 50 ms time constant at every integration step; `_osqp_solve` checks OSQP's status before accepting a solution and the effort allocator relaxes an infeasible wrench request; and `exp_fig5.py` records the maximum commanded rate over each greedy update interval so short setpoint jumps are not skipped.
+The remaining scripts were written during development: `audit2.py`, `audit3.py`, `diagnose.py`, `envelope.py`, `octo.py`, `mc_study.py`, `sim.py`, `stratified.py`, `sweep.py`, `thrust_sweep.py`, `make_figs.py`, `make_sim_fig.py`, `lpf_analysis.py`, `concept_figs.py`, `make_all_figs.py`, `export_mat.py`, `run_all.py` and `run_experiments.py`. They print diagnostics or draw quick matplotlib plots (written to `figures/generated/` and `figures/data/`). They are not needed to reproduce the paper, and some use older settings than the paper (for example, `sweep.py` keeps the original low-pass constant).
 
-## Requirements
+## Installation
 
-Python 3.10 or newer is recommended. The project uses NumPy, SciPy, Matplotlib, and OSQP; the minimum NumPy version is 2.0 because the high-fidelity propeller model uses `numpy.trapezoid`. Requirements are listed in `requirements.txt` but are not pinned to exact versions, so this is not a bit-for-bit locked environment. No external optimization solver is needed beyond OSQP. Rights to distribute the included code and embedded propeller data were confirmed by the user; the propeller source and attribution are documented in `hifi/apc10x47.py`.
-Python 3.10 or newer is recommended. The project uses NumPy, SciPy, Matplotlib, and OSQP; the minimum NumPy version is 2.0 because the high-fidelity propeller model uses `numpy.trapezoid`. Requirements are listed in `requirements.txt` but are not pinned to exact versions, so this is not a bit-for-bit locked environment. The Windows run in this workspace used Python 3.12.10, NumPy 2.5.3, SciPy 1.18.1, Matplotlib 3.11.2, and OSQP 1.1.3. No external optimization solver is needed beyond OSQP. Rights to distribute the included code and embedded propeller data were confirmed by the user; the propeller source and attribution are documented in `hifi/apc10x47.py`.
+The code needs Python 3.10 or newer with NumPy (2.0 or newer), SciPy, Matplotlib and OSQP. No other solver is required. The versions in `requirements.txt` are minimums, not pins. The results in `results/generated` were last checked with Python 3.12.10, NumPy 2.5.3, SciPy 1.18.1, Matplotlib 3.11.2, contourpy 1.4.0 and OSQP 1.1.3 on Windows 11.
 
-### Windows PowerShell
-
-From the repository root:
+Windows (PowerShell), from the repository root:
 
 ```powershell
 python -m venv .venv
@@ -43,73 +57,84 @@ python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
 ```
 
-If PowerShell blocks activation, either use a new Command Prompt and run `.venv\Scripts\activate.bat`, or allow activation for the current PowerShell process with `Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass`. The experiment scripts use Python's default multiprocessing context and can run natively on Windows. `run_revision.ps1` runs the full campaign from the repository root.
+If PowerShell refuses to run the activation script, run `Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass` first, or use `.venv\Scripts\activate.bat` from a Command Prompt.
 
-### Ubuntu or WSL2
-
-Install Python and venv support if needed, then run from the repository root:
+Linux or WSL2:
 
 ```bash
-sudo apt update
-sudo apt install python3 python3-venv python3-pip
 python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
 ```
 
-The same commands apply in a Linux environment with Python 3.10+. Use the virtual environment’s Python for all commands below.
+## Running the experiments
 
-## Running experiments
+Run everything from the repository root. New results go to `results/generated/`, which is not tracked by git. `results/reference/` is never written.
 
-Run commands from the repository root unless a command says otherwise. Every new result is written beneath `results/generated/`; logs from the full campaign go in `results/generated/logs/`. Existing files in `results/reference/` are not overwritten.
+| Study | Command | Output | Used for |
+|---|---|---|---|
+| Collective sweep | `python exp_sweep.py` | `sweep.json` | Table I, Fig. 3 |
+| Moment-reversal time histories | `python exp_fig5.py` | `rate_all.dat`, `h_all.dat` | Fig. 4 |
+| Randomised missions (N per box) | `python exp_mc.py 100` | `mc.json` | Table II |
+| Certifiability map | `python exp_certmap.py` | `certmap.dat` | Fig. 5 (left) |
+| Forward flight | `python exp_ff.py` | `ff.json` | Fig. 5 (right) |
+| Input delay | `python exp_delay.py` | `delay.json` | Fig. 6 |
+| Parameter uncertainty (plants per level) | `python exp_robust.py 50` | `robust.json` | Table III |
+| Choice of $\kappa$ | `python exp_kappa.py` | `kappa.json` | Sec. IV text |
+| QP timing on this computer | `python exp_timing.py` | `timing.json` | Sec. IV text |
+| High-fidelity campaign | `python hifi/run_hifi.py` | `hifi.json` | Table IV |
 
-| Purpose | Command | Main output |
-|---|---|---|
-| Collective sweep | `python exp_sweep.py` | `sweep.json` |
-| Time histories at the reversal case | `python exp_fig5.py` | `rate_all.dat`, `h_all.dat` |
-| Randomized missions; optional mission count argument | `python exp_mc.py 100` | `mc.json` |
-| Floor-selection study | `python exp_kappa.py` | `kappa.json` |
-| Certifiability map | `python exp_certmap.py` | `certmap.dat` |
-| Forward flight | `python exp_ff.py` | `ff.json` |
-| Delay study | `python exp_delay.py` | `delay.json` |
-| Robust campaign; plants per uncertainty level | `python exp_robust.py 50` | `robust.json` |
-| QP timing on the current computer | `python exp_timing.py` | `timing.json` |
-| High-fidelity campaign | `python hifi/run_hifi.py` | `hifi.json` |
-| Full ordered campaign (Windows PowerShell) | `powershell -ExecutionPolicy Bypass -File run_revision.ps1` | All experiments; logs go to `results/generated/logs/`. |
-| Full ordered campaign (Linux/WSL2) | `bash run_revision.sh` | All experiments; logs go to `results/generated/logs/`. |
+`exp_fig5.py` keeps the name it had when the reversal plot was Fig. 5 of the submitted manuscript.
 
-The campaign uses fixed NumPy generator seeds in its scripts, but solver/library versions, OS, CPU timing, and floating-point behavior are not locked. OSQP uses tolerances and iteration settings in `allocators.py`. Results should be compared numerically with tolerances; timing results are machine-specific. The corrected robust formulation and solver-failure behavior may cause robust outputs to differ from the supplied reference JSON. Regenerate that campaign before using it to support revised claims.
+To run everything in order, use `powershell -ExecutionPolicy Bypass -File run_revision.ps1` on Windows or `bash run_revision.sh` on Linux. Logs are written to `results/generated/logs/`. The whole campaign takes a few hours on two cores, and the high-fidelity part takes the longest. The scripts run natively on Windows, where Python's multiprocessing uses spawned worker processes.
 
-Both full-suite runners leave the manuscript alone. To opt in to the read-only number check, set `PAPER_TEX` to a local `main.tex` path before running either script (`$env:PAPER_TEX = 'C:\path\to\main.tex'` in PowerShell, or `PAPER_TEX=/path/to/main.tex bash run_revision.sh` in Bash). The standalone checker is `python verify_numbers.py PATH_TO_MAIN_TEX`; it requires the generated JSON outputs. `fill_paper.py PATH_TO_MAIN_TEX` is different: it writes to the specified manuscript and its adjacent figure/data sources, and is not called by either runner. `hifi/fill_hifi.py PATH_TO_OUTPUT_TEX` writes a generated table fragment to the specified path.
+The runners finish by calling `make_paper_data.py` (see below). If the environment variable `PAPER_TEX` points to a local copy of the manuscript's `main.tex`, they also run `verify_numbers.py`, which only reads the manuscript. `fill_paper.py` writes into the manuscript and is never called by the runners.
 
-## Figures and paper mapping
+## Reproducing the figures
 
-The seven TikZ/PGFPlots fragments referenced by the manuscript, together with their required plotting tables, are included under `figures/tikz/` and `data/`. The manuscript and bibliography are not included. `fig_section.tex` and its data are included for completeness, although that figure is commented out in the supplied manuscript.
+The figures are drawn with PGFPlots from the tables in `data/`. `make_paper_data.py` rebuilds all of these tables:
 
-| Manuscript item | Available inputs or script | What is and is not reproduced |
-|---|---|---|
-| Fig. 1, achievable wrench-rate ellipsoids | `figures/tikz/fig_ellipse.tex`; `data/ell_*.dat`; `concept_figs.py` | Manuscript plot source/data included; `concept_figs.py` also renders a standalone diagnostic. |
-| Fig. 2, certified set | `figures/tikz/fig_nested.tex`; `data/n2_C.dat`, `data/n2_Keps.dat` | Manuscript plot source and data included. |
-| Fig. 3, collective sweep | `figures/tikz/fig_sweep.tex`; `data/sweep.dat`; `exp_sweep.py` | Manuscript plot source and data included. `thrust_sweep.py` makes a related diagnostic with a different sweep. |
-| Fig. 4, reversal histories | `figures/tikz/fig_lpf2.tex`; `data/rate_all.dat`, `data/h_all.dat`; `exp_fig5.py` | Manuscript plot source and data included. `lpf_analysis.py` makes a separate per-step-rate diagnostic. |
-| Fig. 5, certifiability and forward flight | `figures/tikz/fig_applic.tex`; `data/certmap.dat`, `data/certfront.dat`, `data/ff.dat`; `exp_certmap.py`, `exp_ff.py` | Manuscript plot source and data included. |
-| Fig. 6, delay sweep | `figures/tikz/fig_delayregimes.tex`; `data/delay.dat`, `data/delay_marg.dat`, `data/delay_eta.dat`; `exp_delay.py` | Manuscript plot source and data included. `delay_study.py` renders a related diagnostic with a different sweep. |
-| Optional allocation-section concept | `figures/tikz/fig_section.tex`; `data/alloc_greedy.dat`, `data/alloc_cbf.dat` | Source and data are included, but this figure is commented out in the manuscript. |
-| Tables I–IV | `exp_sweep.py`, `exp_mc.py`, `exp_robust.py`, `hifi/run_hifi.py` | Numerical result files are available; manuscript tables themselves are not in the repository. |
+```bash
+python make_paper_data.py --compare data                       # from results/generated
+python make_paper_data.py --results reference --compare data   # from results/reference
+```
 
-To make the included diagnostic plots and data, run `python make_all_figs.py`. This runs simulations and writes PDFs to `figures/generated/` and CSV data to `figures/data/`. The manuscript TikZ fragments can be compiled from a copy of the manuscript project with its `figures/tikz/` and `data/` paths preserved. The delay and low-pass diagnostics can be run separately with `python delay_study.py` and `python lpf_analysis.py`. MATLAB export of figure data is available with `python export_mat.py` after generating those CSV files.
+The new tables are written to `results/generated/paper_data/`. `--compare data` prints the largest difference to the tables used in the paper, and `--out data` replaces them.
 
-## Reference outputs
+| Figure | TikZ source | Tables | Produced from |
+|---|---|---|---|
+| 1, wrench-rate ellipses | `fig_ellipse.tex` | `ell_sweet.dat`, `ell_stopped.dat`, `ell_sat.dat` | the model (hexarotor, $(\tau_x,\tau_y)$ block of $D$) |
+| 2, certified set | `fig_nested.tex` | `n2_C.dat`, `n2_Keps.dat` | the model (two-rotor illustration, see below) |
+| 3, collective sweep | `fig_sweep.tex` | `sweep.dat` | `exp_sweep.py` |
+| 4, reversal histories | `fig_lpf2.tex` | `rate_all.dat`, `h_all.dat` | `exp_fig5.py` |
+| 5, certifiability and forward flight | `fig_applic.tex` | `certmap.dat`, `certfront.dat`, `ff.dat` | `exp_certmap.py`, `exp_ff.py` |
+| 6, input delay | `fig_delayregimes.tex` | `delay.dat`, `delay_marg.dat`, `delay_eta.dat` | `exp_delay.py` |
 
-The curated snapshot in `results/reference/` contains eight JSON and three DAT files (about 0.5 MB). The JSON files cover the collective sweep, Monte Carlo, robustness, floor choice, delay, forward flight, timing, and high-fidelity campaigns. The DAT files contain the certifiability map and Figure 4 readiness/rate histories. Each DAT file starts with column names; JSON can be loaded with Python’s standard `json` module. `hifi.json` also contains delay cases. Timing measurements describe the original machine and are not expected to match elsewhere.
+Fig. 2 shows a two-rotor system with $A=I$, so $D=4\,\mathrm{diag}(\psi_1,\psi_2)$. The set $\mathcal C$ is $\ln\psi_1+\ln\psi_2\ge L^{\max}-1.3$, and $K_\varepsilon$ is the region where every $\psi_i\ge0.02$. `fig_section.tex` is a hand-drawn sketch with no data; it is commented out in the manuscript. `data/alloc_greedy.dat` and `data/alloc_cbf.dat` are not read by any current figure.
 
-The originals were preserved, and the integrated files were checked against them by SHA-256. New runs go into the separate generated directory. For comparisons, first check that the script, parameters, seeds, and allocator version match; then compare corresponding JSON values or aligned DAT columns with tolerances appropriate to the solver and platform. Do not use image equality as evidence of numerical reproducibility. The current robust campaign’s implementation has been corrected to include the worst-case drift and torque reserve, so the old `robust.json` is a historical reference, not a passing target for that corrected implementation. Token-named files and logs were not included.
+A few values are typed directly into the TikZ files: the shaded regions of Fig. 6 ($\tau_d^\star=1.9656$, failure at $91.6$, delay-free margin $0.1636$, all in $10^{-3}T_0$ or nats) and the start of the non-certifiable band in Fig. 5 ($9.33$ m/s). `make_paper_data.py` prints these values so they can be checked against the sources.
 
-## Scope and release status
+The TikZ files are meant to be `\input` from the manuscript. Its preamble defines what they use: the lengths `\panelwd` and `\panelht`, the macros `\lbar`, `\ldrop` and `\Cset`, the colours `cBlue`, `cOrange`, `cRed`, `cGreen` and `cGrey`, the TikZ libraries `arrows.meta` and `patterns`, and PGFPlots with the `colorbar` support. The paths `data/...` are relative to the manuscript directory.
 
-The nominal theory uses a signed-quadratic thrust/drag model and continuous-time barrier enforcement. The main simulator uses time stepping; the high-fidelity model adds quasi-steady aerodynamics, motor/ESC/battery limits, delay, sensing effects, and rigid-body dynamics. All evidence is simulation-based; it does not establish flight validation.
+## Reproducibility
 
-The repository is distributed under the [MIT License](LICENSE), with copyright attributed to Giuseppe Silano (2026), following confirmation of the required distribution rights. The license applies to project-owned code and materials; dependencies and third-party data remain subject to their own licenses and attribution terms. No citation metadata is included while the manuscript remains under review.
+Rebuilt from `results/reference/`, every table matches `data/` to the printed precision. The two contour tables differ by less than 0.004 in axis units, because the originals were traced on a coarser grid. The paper figures can therefore be regenerated from the reference outputs.
 
-Before public release, rerun and review the corrected robustness results, reconcile any result differences with the manuscript, and confirm the complete manuscript build works from a release snapshot. This repository is prepared locally only; it has not been published.
+All random numbers come from seeded NumPy generators, so a run is repeatable on a given machine. Results can still differ between environments, because SLSQP (SciPy) and OSQP may converge to different points with other library versions or platforms. A full re-run with the versions listed above gave the following:
+
+* The proposed filter and the effort QP agree with the reference to within $3\times10^{-3}$ in every study, except for the one forward-flight case listed below.
+* The certifiability map, the delay study and the $\kappa$ study agree. The only exceptions are two certifiability cells deep in the non-certifiable corner, and both lie below the colour-bar range.
+* The greedy and low-pass baselines differ where they drive a rotor through zero speed, which is a discontinuous event. At collective 0.7 in the sweep, low-pass DAAM reaches $\min h=-0.52$ instead of $-1.23$, and greedy DAAM $-0.51$ instead of $-0.54$. In Table II the violation rates and worst cases are unchanged, but the mean $h_{\min}$ of low-pass DAAM in the scarce hexarotor box moves from $-0.51$ to $-0.49$. In the high-fidelity campaign the greedy violation rate on agile missions is 20 % instead of 25 %. Both baselines still violate the floor in the same cases.
+* Forward flight agrees, except for the airspeed-scheduled filter on the hexarotor at 15 m/s, which is beyond the certifiable speed ($\min h_s=-0.53$ instead of $-0.56$).
+* In the robust ablation (lower block of Table III), the metric-only rows differ: at $p=30\%$ the violation rate is 10 % instead of 48 %. All other rows of Table III agree.
+
+`exp_timing.py` measures the computer it runs on, so its numbers will be different elsewhere.
+
+## Limitations
+
+The barrier is built on the signed-quadratic rotor model and enforced in continuous time. The simulators integrate with a fixed step of $10^{-3}T_0$. The high-fidelity plant adds Reynolds-number and inflow effects on the propeller coefficients, back-EMF current limits, ESC lag, battery sag, friction, rotor H-force, body drag, telemetry noise and delay, and rigid-body dynamics. It does not model unsteady inflow or rotor-rotor interaction. Manoeuvres that need a rotor to reverse its spin are outside the scope of the method by design.
+
+## License and citation
+
+MIT License, copyright (c) 2026 Giuseppe Silano; see [LICENSE](LICENSE). The propeller data in `hifi/apc10x47.py` come from the UIUC Propeller Database (Brandt and Selig), and the source is given in that file. Citation details will be added once the paper is published.
