@@ -4,6 +4,8 @@ A: a zero column of A empties the floor window;  B: weighted vs plain leverage
 for different motors;  C: the null-space projector;  D: norms in theta;
 E: the wrench-rate budget identity.
 """
+import os, sys
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))  # repository root
 import numpy as np
 from platforms import hexarotor
 from daam import D_matrix, grad_h, h_value, psi, a_bar

@@ -3,6 +3,8 @@ envelope.py — operational-envelope single-component test and applicability map
 Shows that hovering flight stays in one connected component of {h>=ell_bar}
 (no stratum jump), and maps where component-crossing is forced.
 """
+import os, sys
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))  # repository root
 import numpy as np
 from platforms import hexarotor
 from gate import alloc_on_fiber, ell_dagger, h_max_point

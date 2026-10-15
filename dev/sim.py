@@ -3,6 +3,8 @@ sim.py — closed-loop allocation-layer comparison on a wrench trajectory that
 enters the component-crossing regime (low thrust + large torque reversal).
 Integrates vdot=d(v)+M^{-1}tau at 1 kHz; records continuity, tracking, authority.
 """
+import os, sys
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))  # repository root
 import numpy as np
 from project_paths import result_path
 from platforms import hexarotor

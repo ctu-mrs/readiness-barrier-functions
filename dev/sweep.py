@@ -6,6 +6,8 @@ the CBF filter stays bounded and floor-respecting. Produces figure + table.
 Development script, not used for the paper. Its low-pass baseline still uses the
 original filter constant a = (UPD dt)/(0.05 + UPD dt) at every step; see harden.py.
 """
+import os, sys
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))  # repository root
 import os, numpy as np
 import matplotlib; matplotlib.use("Agg"); import matplotlib.pyplot as plt
 from platforms import hexarotor

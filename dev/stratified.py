@@ -2,6 +2,8 @@
 stratified.py — (a) stratified MC in the authority-scarce corner;
 (b) robustness to parametric error (controller uses nominal, plant is perturbed).
 """
+import os, sys
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))  # repository root
 import numpy as np
 from project_paths import result_path
 from platforms import hexarotor

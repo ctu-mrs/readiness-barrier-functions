@@ -2,6 +2,8 @@
 mc_study.py — Monte-Carlo over randomized certifiable missions + ablations.
 Reports mean +/- 95% CI (t-based) for h_min, TV, wrench error.
 """
+import os, sys
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))  # repository root
 import numpy as np
 from project_paths import result_path
 from platforms import hexarotor

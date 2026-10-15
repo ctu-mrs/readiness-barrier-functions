@@ -1,4 +1,6 @@
 """octo.py — three-way comparison on the fully-actuated tilted octorotor (n=8,m=6)."""
+import os, sys
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))  # repository root
 import numpy as np
 from platforms import tilted_octorotor
 from gate import ell_dagger

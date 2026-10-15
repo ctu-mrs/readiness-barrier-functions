@@ -4,6 +4,8 @@ at a CERTIFIABLE authority-scarce operating point (thrust 0.75, amp 1.5),
 i.e. the regime where greedy DAAM violates the floor.
 Writes figures/generated/fig_timehist.pdf and the corresponding CSV data.
 """
+import os, sys
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))  # repository root
 import os, numpy as np
 import matplotlib; matplotlib.use("Agg"); import matplotlib.pyplot as plt
 from platforms import hexarotor

@@ -1,4 +1,6 @@
 """thrust_sweep.py — where does each allocator lose authority? (certifiability-aware)"""
+import os, sys
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))  # repository root
 import numpy as np, os
 import matplotlib; matplotlib.use("Agg"); import matplotlib.pyplot as plt
 from platforms import hexarotor

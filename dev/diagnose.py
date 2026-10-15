@@ -1,4 +1,6 @@
 """diagnose.py — why h_min<0: is the floor above the task-achievable authority?"""
+import os, sys
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))  # repository root
 import numpy as np
 from platforms import hexarotor, tilted_octorotor
 from daam import h_value

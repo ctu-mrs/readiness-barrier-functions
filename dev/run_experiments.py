@@ -1,6 +1,8 @@
 """run_experiments.py — closed-loop evaluation (slow: ~5 min total).
 Order: certifiability diagnosis -> floor rule -> thrust sweep -> figures.
 """
+import os, sys
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))  # repository root
 import runpy
 print("### 1. certifiability diagnosis (which operating points admit a floor)")
 runpy.run_module("diagnose", run_name="__main__")

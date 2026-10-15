@@ -1,6 +1,8 @@
 """
 export_mat.py — export generated figure-data CSV files as MATLAB .mat files.
 """
+import os, sys
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))  # repository root
 import os, numpy as np
 from scipy.io import savemat
 from project_paths import FIGURE_DATA_DIR, figure_data_path

@@ -3,6 +3,8 @@ lpf_analysis.py — is the low-pass critique a strawman? Measure what physically
 matters: peak commanded rate (saturation risk), phase lag, and floor-violation
 DURATION, not just total variation.
 """
+import os, sys
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))  # repository root
 import numpy as np, os
 import matplotlib; matplotlib.use("Agg"); import matplotlib.pyplot as plt
 from platforms import hexarotor

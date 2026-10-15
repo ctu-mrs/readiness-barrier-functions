@@ -11,6 +11,8 @@ concept_figs.py — data for the two conceptual figures.
     strata (v1: +v* -> -v*), showing that the strata are EQUAL in authority and
     the collapse of depth Delta = ln(n/(n-m)) lies in the valley between them.
 """
+import os, sys
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))  # repository root
 import numpy as np, os
 from platforms import hexarotor
 from daam import D_matrix

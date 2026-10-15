@@ -10,6 +10,8 @@ Figures produced (figures/generated/):
   fig_timehist.pdf       mechanism: commanded allocation + authority histories
 Runtime: ~4-6 min (fig_thrust and fig_timehist run closed-loop simulations).
 """
+import os, sys
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))  # repository root
 import runpy, time
 JOBS = [("concept_figs",  "fig_ellipsoid + fig_concept    (fast, <5 s)"),
         ("make_figs",     "fig_applicability              (fast, ~1 min)"),

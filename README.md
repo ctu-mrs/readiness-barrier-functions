@@ -41,8 +41,9 @@ The simulators use nondimensional units: $\bar\tau=b=m=1$, so speeds are in unit
 | `verify_numbers.py`, `fill_paper.py`, `hifi/fill_hifi.py` | Helpers that check or write the numbers in the manuscript (the manuscript is not included). |
 | `export_results_mat.py` | Copies all results into one MATLAB `.mat` file. |
 | `project_paths.py` | Output locations. |
+| `dev/` | Development and diagnostic scripts (see below). |
 
-The remaining scripts were written during development: `audit2.py`, `audit3.py`, `diagnose.py`, `envelope.py`, `octo.py`, `mc_study.py`, `sim.py`, `stratified.py`, `sweep.py`, `thrust_sweep.py`, `make_figs.py`, `make_sim_fig.py`, `lpf_analysis.py`, `concept_figs.py`, `make_all_figs.py`, `export_mat.py`, `run_all.py` and `run_experiments.py`. They print diagnostics or draw quick matplotlib plots (written to `figures/generated/` and `figures/data/`). They are not needed to reproduce the paper, and some use older settings than the paper (for example, `sweep.py` keeps the original low-pass constant).
+`dev/` holds scripts written during development. They print diagnostics or draw quick matplotlib plots, which go to `figures/generated/` and `figures/data/`. They are not needed to reproduce the paper, and some use older settings than the paper (for example, `dev/sweep.py` keeps the original low-pass constant). Run them from anywhere, e.g. `python dev/make_all_figs.py`.
 
 ## Installation
 
@@ -111,7 +112,7 @@ The new tables are written to `results/generated/paper_data/`. `--compare data` 
 | 5, certifiability and forward flight | `fig_applic.tex` | `certmap.dat`, `certfront.dat`, `ff.dat` | `exp_certmap.py`, `exp_ff.py` |
 | 6, input delay | `fig_delayregimes.tex` | `delay.dat`, `delay_marg.dat`, `delay_eta.dat` | `exp_delay.py` |
 
-Fig. 2 shows a two-rotor system with $A=I$, so $D=4\,\mathrm{diag}(\psi_1,\psi_2)$. The set $\mathcal C$ is $\ln\psi_1+\ln\psi_2\ge L^{\max}-1.3$, and $K_\varepsilon$ is the region where every $\psi_i\ge0.02$. `fig_section.tex` is a hand-drawn sketch with no data; it is commented out in the manuscript. `data/alloc_greedy.dat` and `data/alloc_cbf.dat` are not read by any current figure.
+Fig. 2 shows a two-rotor system with $A=I$, so $D=4\,\mathrm{diag}(\psi_1,\psi_2)$. The set $\mathcal C$ is $\ln\psi_1+\ln\psi_2\ge L^{\max}-1.3$, and $K_\varepsilon$ is the region where every $\psi_i\ge0.02$. `fig_section.tex` is a hand-drawn sketch with no data; it is commented out in the manuscript.
 
 A few values are typed directly into the TikZ files: the shaded regions of Fig. 6 ($\tau_d^\star=1.9656$, failure at $91.6$, delay-free margin $0.1636$, all in $10^{-3}T_0$ or nats) and the start of the non-certifiable band in Fig. 5 ($9.33$ m/s). `make_paper_data.py` prints these values so they can be checked against the sources.
 
