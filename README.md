@@ -1,6 +1,6 @@
 # Readiness Barrier Functions
 
-Simulation code for the paper *"Readiness Barrier Functions: Forward-Invariant Control Authority for Overactuated Multirotor Allocation"* (under review).
+Simulation code for the paper *"Readiness Barrier Functions: Forward-Invariant Control Authority for Overactuated Multirotor Allocation"*, accepted for publication in the *IEEE Robotics and Automation Letters* (RA-L). If you use this code, please cite the paper (see [Citation](#citation)).
 
 The paper uses the log-determinant of a drag-aware actuator-authority co-metric (DAAM) as a control barrier function. A torque-level quadratic program keeps this readiness measure above a floor while the vehicle tracks its wrench command. This repository contains the models, the allocators and every experiment in the paper. It also contains the data and TikZ sources of the figures, and a script that rebuilds those data from the experiment outputs.
 
@@ -136,6 +136,25 @@ All random numbers come from seeded NumPy generators, so a run is repeatable on 
 
 The barrier is built on the signed-quadratic rotor model and enforced in continuous time. The simulators integrate with a fixed step of $10^{-3}T_0$. The high-fidelity plant adds Reynolds-number and inflow effects on the propeller coefficients, back-EMF current limits, ESC lag, battery sag, friction, rotor H-force, body drag, telemetry noise and delay, and rigid-body dynamics. It does not model unsteady inflow or rotor-rotor interaction. Manoeuvres that need a rotor to reverse its spin are outside the scope of the method by design.
 
-## License and citation
+## Citation
 
-MIT License, copyright (c) 2026 Giuseppe Silano; see [LICENSE](LICENSE). The propeller data in `hifi/apc10x47.py` come from the UIUC Propeller Database (Brandt and Selig), and the source is given in that file. Citation details will be added once the paper is published.
+If you use this code or build on the paper, please cite:
+
+> G. Silano, "Readiness Barrier Functions: Forward-Invariant Control Authority for Overactuated Multirotor Allocation," *IEEE Robotics and Automation Letters*, vol. XX, no. X, pp. XXXX–XXXX, MONTH YEAR, doi: 10.1109/LRA.YYYY.XXXXXXX.
+
+```bibtex
+@article{Silano2026RAL,
+  author  = {Silano, Giuseppe},
+  title   = {Readiness Barrier Functions: Forward-Invariant Control Authority for Overactuated Multirotor Allocation},
+  journal = {IEEE Robotics and Automation Letters},
+  year    = {YYYY},
+  volume  = {XX},
+  number  = {X},
+  pages   = {XXXX--XXXX},
+  doi     = {10.1109/LRA.YYYY.XXXXXXX}
+}
+```
+
+## License
+
+MIT License, copyright (c) 2026 Giuseppe Silano; see [LICENSE](LICENSE). The propeller data in `hifi/apc10x47.py` come from the UIUC Propeller Database (Brandt and Selig), and the source is given in that file.
